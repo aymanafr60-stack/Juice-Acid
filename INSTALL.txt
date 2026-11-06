@@ -1,0 +1,19 @@
+SQUELCH v0.1 — acid bass voice
+
+INSTALL (VST3)
+1. Close FL Studio.
+2. Copy the whole "Squelch.vst3" folder into:
+   C:\Program Files\Common Files\VST3
+3. Open FL Studio -> Options -> Manage plugins -> Find more plugins (or "Start scan").
+4. Squelch appears under Generators.
+
+QUICK TEST WITHOUT A DAW
+Double-click Squelch.exe. Set your audio device in the Options button at the top.
+Click the on-screen keys, or plug in the MiniLab.
+
+PLAYING IT LIKE ACID
+- Overlapping notes = SLIDE. In FL's piano roll, make a note run into the next one.
+- Velocity 100 or higher = ACCENT (louder, filter jumps open).
+  On the on-screen keyboard, where you click on a key sets the velocity.
+- The squelch lives in Cutoff, Resonance and Env Mod. Turn Resonance up to 70%+.
+- Several accents in a row with high resonance build up — that's intended.

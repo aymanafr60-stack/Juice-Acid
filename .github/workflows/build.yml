@@ -1,0 +1,32 @@
+name: Build Windows plugin
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -B build -G "Visual Studio 17 2022" -A x64
+
+      - name: Build
+        run: cmake --build build --config Release --target Squelch_VST3 Squelch_Standalone --parallel
+
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path out | Out-Null
+          Copy-Item -Recurse build/Squelch_artefacts/Release/VST3/Squelch.vst3 out/
+          Copy-Item build/Squelch_artefacts/Release/Standalone/Squelch.exe out/
+          Copy-Item INSTALL.txt out/
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: Squelch-Windows
+          path: out/
