@@ -267,17 +267,16 @@ public:
 
         g.saveState();
         g.reduceClipRegion (box.toNearestInt());
+
+        // fixed smiley in the background, centred and faded, so the curve reads on top of it
+        {
+            const float r = box.getHeight() * 0.36f;
+            const auto faint = t.accent.withAlpha (0.22f);
+            drawSmiley (g, box.getCentre(), r, t.display, faint, faint, 3.5f);
+        }
+
         g.setColour (t.accent);
         g.strokePath (curve, juce::PathStrokeType (4.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
-
-        // the mascot rides the curve, just left of the cutoff
-        const float sf = fc / 4.0f;
-        if (sf > 25.0f && sf < 18000.0f)
-        {
-            const float r = box.getHeight() * 0.3f;
-            const juce::Point<float> c (xForF (sf), yForDb (magDb (sf)));
-            drawSmiley (g, c, r, t.display, t.accent, t.accent, 3.5f);
-        }
         g.restoreState();
 
         g.setColour (t.displayOutline);
