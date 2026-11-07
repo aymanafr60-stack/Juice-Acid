@@ -41,10 +41,15 @@ int main (int argc, char** argv)
     v.prepare (sr);
     squelch::DriveStage drive;
     drive.prepare (sr); // no oversampling in this quick test
-    drive.setParams (argc > 3 ? (float) std::atof (argv[3]) : 0.0f,
-                     argc > 4 ? (float) std::atof (argv[4]) : 0.0f, 0.7f);
+    // args: waveform out.wav [mode drive]   mode -1 = drive off, 0 OD, 1 DIST, 2 FUZZ
+    squelch::DriveParams dp;
+    const int mode = argc > 3 ? std::atoi (argv[3]) : -1;
+    dp.on = mode >= 0; dp.mode = std::max (mode, 0);
+    dp.drive = argc > 4 ? (float) std::atof (argv[4]) : 0.5f;
+    drive.setParams (dp);
     squelch::VoiceParams p;
     p.waveform = argc > 1 ? std::atoi (argv[1]) : 0;
+    p.shape = 0.5f;
     p.resonance = 0.8f; p.envMod = 0.55f; p.decay = 0.35f; p.accent = 0.75f; p.subLevel = 0.0f;
 
     const int bars = 8;

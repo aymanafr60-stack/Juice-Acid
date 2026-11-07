@@ -1,44 +1,71 @@
 #pragma once
 
 #include "PluginProcessor.h"
+#include "Ui.h"
 
-class SquelchLookAndFeel : public juce::LookAndFeel_V4
+// Everything is laid out on a fixed 1000 x 535 canvas, then scaled to the window size.
+class SquelchView : public juce::Component
 {
 public:
-    SquelchLookAndFeel();
-    void drawRotarySlider (juce::Graphics&, int x, int y, int w, int h, float pos,
-                           float startAngle, float endAngle, juce::Slider&) override;
+    SquelchView (SquelchProcessor&, squelch::ui::Skin&);
+
+    void paint (juce::Graphics&) override;
+    void resized() override;
+    void mouseUp (const juce::MouseEvent&) override;
+
+    void tick(); // called ~30x per second by the editor
+    std::function<void()> onThemeToggle;
+
+    static constexpr int canvasW = 1000, canvasH = 535;
+
+private:
+    void updateShapeKnob (int wave);
+    juce::RangedAudioParameter& param (const char* id);
+
+    SquelchProcessor& proc;
+    squelch::ui::Skin& skin;
+
+    // oscillator
+    squelch::ui::PillButton saw, square, pulse, super;
+    squelch::ui::Knob tune, pw, sub, slide;
+
+    // filter + envelope
+    squelch::ui::FilterDisplay display;
+    squelch::ui::Knob envMod, cutoff, res, decay, accent;
+
+    // drive fx
+    squelch::ui::PillButton od, dist, fuzz;
+    squelch::ui::LedToggle driveLed;
+    squelch::ui::Knob drive, tone, level, mix;
+
+    // header / footer
+    squelch::ui::PresetBar presetBar;
+    squelch::ui::OutMeter meter;
+
+    // these bind buttons to parameters, so they come after the buttons
+    squelch::ui::ChoiceGroup waveGroup, modeGroup;
+
+    int currentWave = 0;
+    int lastPresetShown = -1;
+    float meterLevel = 0.0f;
 };
 
-class SquelchEditor : public juce::AudioProcessorEditor
+class SquelchEditor : public juce::AudioProcessorEditor, private juce::Timer
 {
 public:
     explicit SquelchEditor (SquelchProcessor&);
     ~SquelchEditor() override;
 
-    void paint (juce::Graphics&) override;
     void resized() override;
 
 private:
-    struct Knob
-    {
-        juce::Slider slider;
-        juce::Label  label;
-        std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> attachment;
-    };
+    void timerCallback() override { view.tick(); }
+    void applyTheme();
 
-    void addKnob (Knob& k, const juce::String& paramId, const juce::String& name);
-
-    SquelchProcessor& processor;
-    SquelchLookAndFeel lnf;
-
-    Knob cutoff, res, envMod, decay, accent, tune, slide, sub, dist, fuzz, volume;
-
-    juce::ComboBox waveBox;
-    juce::Label    waveLabel;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> waveAttachment;
-
-    juce::MidiKeyboardComponent keyboard;
+    SquelchProcessor& proc;
+    squelch::ui::Skin skin;
+    SquelchView view;
+    juce::TooltipWindow tooltips { this, 600 };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SquelchEditor)
 };

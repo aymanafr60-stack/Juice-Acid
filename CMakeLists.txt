@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(Squelch VERSION 0.1.0)
+project(Squelch VERSION 0.3.0)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -26,6 +26,10 @@ juce_add_plugin(Squelch
     COPY_PLUGIN_AFTER_BUILD     FALSE
     VST3_CATEGORIES             Instrument Synth)
 
+juce_add_binary_data(SquelchData SOURCES
+    Resources/Fredoka-Bold.ttf
+    Resources/Fredoka-Medium.ttf)
+
 target_sources(Squelch PRIVATE
     Source/PluginProcessor.cpp
     Source/PluginEditor.cpp)
@@ -38,6 +42,7 @@ target_compile_definitions(Squelch PUBLIC
 
 target_link_libraries(Squelch
     PRIVATE
+        SquelchData
         juce::juce_audio_utils
         juce::juce_dsp
     PUBLIC

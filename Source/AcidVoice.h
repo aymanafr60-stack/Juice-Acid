@@ -26,7 +26,8 @@ namespace squelch
 
 struct VoiceParams
 {
-    int   waveform     = 0;     // 0 = saw, 1 = square
+    int   waveform     = 0;     // 0 = saw, 1 = square, 2 = pulse, 3 = super (5 detuned saws)
+    float shape        = 0.5f;  // pulse: width 0..1 (0.5 = square) / super: detune 0..1
     float tuneSemis    = 0.0f;  // -12 .. +12
     float cutoff       = 0.35f; // 0 .. 1  (mapped exponentially)
     float resonance    = 0.6f;  // 0 .. 1
@@ -53,6 +54,8 @@ public:
         heldNotes.clear();
         gate = false;
         phase = subPhase = 0.0f;
+        static constexpr float starts[5] = { 0.0f, 0.31f, 0.57f, 0.13f, 0.79f }; // spread so the saws don't start in phase
+        for (int i = 0; i < 5; ++i) superPhase[i] = starts[i];
         s1 = s2 = s3 = s4 = 0.0f;
         filterEnv = ampEnv = accentEnv = accentSweep = 0.0f;
         ampStage = AmpStage::idle;
@@ -138,18 +141,44 @@ public:
 
         // --- oscillators
         const float dt = std::min (freq / fs, 0.45f);
-        float osc;
-        if (params.waveform == 0)
+        float osc = 0.0f;
+        switch (params.waveform)
         {
-            osc = 2.0f * phase - 1.0f;
-            osc -= polyBlep (phase, dt);
-        }
-        else
-        {
-            osc = phase < 0.5f ? 1.0f : -1.0f;
-            osc += polyBlep (phase, dt);
-            osc -= polyBlep (std::fmod (phase + 0.5f, 1.0f), dt);
-            osc *= 0.7f; // level-match the square to the saw
+            case 0: // saw
+                osc = 2.0f * phase - 1.0f;
+                osc -= polyBlep (phase, dt);
+                break;
+
+            case 1: // square
+                osc = squareish (phase, 0.5f, dt) * 0.7f; // level-matched to the saw
+                break;
+
+            case 2: // pulse with adjustable width (5% .. 95%)
+            {
+                const float pw = 0.05f + 0.9f * std::clamp (params.shape, 0.0f, 1.0f);
+                osc = squareish (phase, pw, dt) * 0.7f;
+                osc -= 0.7f * (2.0f * pw - 1.0f); // remove the DC offset narrow pulses create
+                break;
+            }
+
+            case 3: // super: five saws spread up to +-35 cents
+            {
+                static constexpr float spread[5] = { 0.0f, -1.0f, 1.0f, -0.45f, 0.45f };
+                const float cents = 35.0f * std::clamp (params.shape, 0.0f, 1.0f);
+                for (int i = 0; i < 5; ++i)
+                {
+                    const float d = std::min (dt * std::exp2 (spread[i] * cents / 1200.0f), 0.45f);
+                    float v = 2.0f * superPhase[i] - 1.0f;
+                    v -= polyBlep (superPhase[i], d);
+                    osc += v;
+                    superPhase[i] += d;
+                    if (superPhase[i] >= 1.0f) superPhase[i] -= 1.0f;
+                }
+                osc *= 0.5f; // ~ level-match five saws to one
+                break;
+            }
+
+            default: break;
         }
         phase += dt;
         if (phase >= 1.0f) phase -= 1.0f;
@@ -201,6 +230,7 @@ public:
                              + (accented ? smoothEnvMod * 2.5f * filterEnv : 0.0f);
         float fc = baseHz * std::exp2 (envOct);
         fc = std::clamp (fc, 20.0f, 0.42f * fs);
+        lastCutoffHz = fc;
 
         float y = ladder (oscMix * 0.5f, fc, smoothRes);
 
@@ -220,6 +250,9 @@ public:
 
     bool isActive() const { return ampStage != AmpStage::idle; }
 
+    // Current (modulated) filter cutoff, for the on-screen filter display.
+    float getLastCutoffHz() const { return lastCutoffHz; }
+
 private:
     enum class AmpStage { idle, attack, hold, release };
 
@@ -228,6 +261,14 @@ private:
         filterEnv = 1.0f;
         accentEnv = accented ? 1.0f : 0.0f;
         ampStage  = AmpStage::attack;
+    }
+
+    static float squareish (float ph, float pw, float dt)
+    {
+        float v = ph < pw ? 1.0f : -1.0f;
+        v += polyBlep (ph, dt);
+        v -= polyBlep (std::fmod (ph + 1.0f - pw, 1.0f), dt);
+        return v;
     }
 
     static float polyBlep (float t, float dt)
@@ -281,6 +322,8 @@ private:
     float currentPitch = 48.0f, targetPitch = 48.0f;
 
     float phase = 0.0f, subPhase = 0.0f;
+    float superPhase[5] = {};
+    float lastCutoffHz = 1000.0f;
     float s1 = 0, s2 = 0, s3 = 0, s4 = 0;
     float filterEnv = 0, ampEnv = 0, accentEnv = 0, accentSweep = 0;
     AmpStage ampStage = AmpStage::idle;

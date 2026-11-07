@@ -1,160 +1,272 @@
 #include "PluginEditor.h"
+#include "Presets.h"
+#include "BinaryData.h"
 
-namespace colours
+using namespace squelch::ui;
+
+// ------------------------------------------------------------------ layout constants
+namespace layout
 {
-    const juce::Colour bg      { 0xff141414 };
-    const juce::Colour panel   { 0xff1f1f1f };
-    const juce::Colour accent  { 0xffd4ff3a }; // acid yellow-green
-    const juce::Colour text    { 0xffe6e6e6 };
-    const juce::Colour dim     { 0xff8a8a8a };
+    const juce::Rectangle<float> oscPanel    { 30.0f, 103.0f, 202.0f, 368.0f };
+    const juce::Rectangle<float> filterPanel { 251.0f, 103.0f, 480.0f, 368.0f };
+    const juce::Rectangle<float> drivePanel  { 750.0f, 103.0f, 222.0f, 368.0f };
+    const juce::Point<float> logoCentre      { 52.0f, 40.0f };
+    constexpr float logoRadius = 23.0f;
 }
 
-// ------------------------------------------------------------------ look and feel
-SquelchLookAndFeel::SquelchLookAndFeel()
+// ------------------------------------------------------------------ view
+SquelchView::SquelchView (SquelchProcessor& p, Skin& s)
+    : proc (p), skin (s),
+      saw (s, "SAW"), square (s, "SQUARE"), pulse (s, "PULSE"), super (s, "SUPER"),
+      tune (s, param ("tune"), "TUNE"), pw (s, param ("pw"), "PW"),
+      sub (s, param ("sub"), "SUB"), slide (s, param ("slide"), "SLIDE"),
+      display (s),
+      envMod (s, param ("envmod"), "ENV MOD"), cutoff (s, param ("cutoff"), "CUTOFF", true),
+      res (s, param ("res"), "RESONANCE", true), decay (s, param ("decay"), "DECAY"),
+      accent (s, param ("accent"), "ACCENT"),
+      od (s, "OD"), dist (s, "DIST"), fuzz (s, "FUZZ"),
+      driveLed (s, param ("drive_on")),
+      drive (s, param ("drive"), "DRIVE"), tone (s, param ("tone"), "TONE"),
+      level (s, param ("level"), "LEVEL"), mix (s, param ("mix"), "MIX"),
+      presetBar (s),
+      meter (s, param ("volume")),
+      waveGroup (param ("wave"), { &saw, &square, &pulse, &super }),
+      modeGroup (param ("drive_mode"), { &od, &dist, &fuzz })
 {
-    setColour (juce::Slider::textBoxTextColourId, colours::text);
-    setColour (juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
-    setColour (juce::Label::textColourId, colours::text);
-    setColour (juce::ComboBox::backgroundColourId, colours::panel);
-    setColour (juce::ComboBox::outlineColourId, colours::dim);
-    setColour (juce::ComboBox::textColourId, colours::text);
-    setColour (juce::ComboBox::arrowColourId, colours::accent);
-    setColour (juce::PopupMenu::backgroundColourId, colours::panel);
-    setColour (juce::PopupMenu::highlightedBackgroundColourId, colours::accent.withAlpha (0.3f));
+    for (auto* c : std::initializer_list<juce::Component*> {
+             &saw, &square, &pulse, &super, &tune, &pw, &sub, &slide,
+             &display, &envMod, &cutoff, &res, &decay, &accent,
+             &od, &dist, &fuzz, &driveLed, &drive, &tone, &level, &mix,
+             &presetBar, &meter })
+        addAndMakeVisible (c);
+
+    // knob sizes
+    for (auto* k : { &tune, &pw, &sub, &slide }) k->knobSize = 48;
+    for (auto* k : { &envMod, &decay, &accent }) k->knobSize = 58;
+    cutoff.knobSize = res.knobSize = 92;
+    for (auto* k : { &drive, &tone, &level, &mix }) k->knobSize = 46;
+
+    // the PW knob is "PW" for pulse, "DETUNE" for super, and unused for saw/square
+    waveGroup.onChange = [this] (int w) { updateShapeKnob (w); };
+    updateShapeKnob ((int) std::round (proc.apvts.getRawParameterValue ("wave")->load()));
+
+    display.getCutoffHz  = [this] { return proc.displayCutoffHz.load(); };
+    display.getResonance = [this] { return proc.apvts.getRawParameterValue ("res")->load(); };
+
+    presetBar.getIndex = [this] { return proc.getPresetIndex(); };
+    presetBar.getCount = [] { return squelch::numFactoryPresets; };
+    presetBar.getName  = [] (int i) { return juce::String (squelch::factoryPresets[juce::jlimit (0, squelch::numFactoryPresets - 1, i)].name); };
+    presetBar.load     = [this] (int i) { proc.loadPreset (i); presetBar.repaint(); };
+
+    saw.setTooltip ("Saw: the classic acid buzz");
+    square.setTooltip ("Square: hollow, rubbery");
+    pulse.setTooltip ("Pulse: square with adjustable width (PW knob)");
+    super.setTooltip ("Super: five detuned saws (DETUNE knob)");
+    od.setTooltip ("Overdrive: warm, gentle");
+    dist.setTooltip ("Distortion: dense, compressed");
+    fuzz.setTooltip ("Fuzz: harsh, broken, octave-up grit");
+    driveLed.setHelpText ("Drive on/off");
+
+    setSize (canvasW, canvasH);
 }
 
-void SquelchLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int w, int h, float pos,
-                                           float startAngle, float endAngle, juce::Slider&)
+juce::RangedAudioParameter& SquelchView::param (const char* id)
 {
-    auto bounds = juce::Rectangle<float> ((float) x, (float) y, (float) w, (float) h).reduced (6.0f);
-    const float radius = juce::jmin (bounds.getWidth(), bounds.getHeight()) / 2.0f;
-    const auto centre = bounds.getCentre();
-    const float angle = startAngle + pos * (endAngle - startAngle);
-    const float arcR = radius - 3.0f;
+    auto* p = proc.apvts.getParameter (id);
+    jassert (p != nullptr);
+    return *p;
+}
 
-    juce::Path track;
-    track.addCentredArc (centre.x, centre.y, arcR, arcR, 0.0f, startAngle, endAngle, true);
-    g.setColour (colours::panel.brighter (0.15f));
-    g.strokePath (track, juce::PathStrokeType (4.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+void SquelchView::updateShapeKnob (int wave)
+{
+    currentWave = wave;
+    pw.setLabel (wave == 3 ? "DETUNE" : "PW");
+    pw.setAlpha (wave >= 2 ? 1.0f : 0.35f);
+    pw.valueText = [this]
+    {
+        const float v = proc.apvts.getRawParameterValue ("pw")->load();
+        if (currentWave == 3) return juce::String (juce::roundToInt (v * 35.0f)) + " ct";
+        if (currentWave == 2) return juce::String (juce::roundToInt ((0.05f + 0.9f * v) * 100.0f)) + "%";
+        return juce::String ("n/a");
+    };
+    pw.repaint();
+}
 
-    juce::Path value;
-    value.addCentredArc (centre.x, centre.y, arcR, arcR, 0.0f, startAngle, angle, true);
-    g.setColour (colours::accent);
-    g.strokePath (value, juce::PathStrokeType (4.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+void SquelchView::tick()
+{
+    const float peak = proc.outputPeak.exchange (0.0f);
+    meterLevel = std::max (peak, meterLevel * 0.86f);
+    meter.setLevel (meterLevel);
+    display.repaint();
 
-    const float knobR = radius - 10.0f;
-    g.setColour (colours::panel.brighter (0.05f));
-    g.fillEllipse (centre.x - knobR, centre.y - knobR, knobR * 2.0f, knobR * 2.0f);
+    const int idx = proc.getPresetIndex();
+    if (idx != lastPresetShown) { lastPresetShown = idx; presetBar.repaint(); }
+}
 
-    juce::Path pointer;
-    pointer.addRoundedRectangle (-1.5f, -knobR, 3.0f, knobR * 0.55f, 1.5f);
-    g.setColour (colours::text);
-    g.fillPath (pointer, juce::AffineTransform::rotation (angle).translated (centre));
+void SquelchView::mouseUp (const juce::MouseEvent& e)
+{
+    if (e.position.getDistanceFrom (layout::logoCentre) <= layout::logoRadius + 4.0f && onThemeToggle)
+        onThemeToggle();
+}
+
+void SquelchView::resized()
+{
+    // oscillator
+    saw.setBounds    (48, 156, 84, 42);
+    square.setBounds (138, 156, 84, 42);
+    pulse.setBounds  (48, 204, 84, 42);
+    super.setBounds  (138, 204, 84, 42);
+    tune.setBounds   (43, 258, 90, 100);
+    pw.setBounds     (131, 258, 90, 100);
+    sub.setBounds    (43, 362, 90, 100);
+    slide.setBounds  (131, 362, 90, 100);
+
+    // filter + envelope
+    display.setBounds (268, 155, 447, 108);
+    constexpr int labelY = 377;                          // all filter labels share one line
+    auto place = [] (Knob& k, int cx, int w)
+    {
+        const int top = labelY - k.knobSize - 10;
+        k.setBounds (cx - w / 2, top, w, labelY + 42 - top);
+    };
+    place (envMod, 303, 86);
+    place (cutoff, 398, 112);
+    place (res,    510, 112);
+    place (decay,  606, 86);
+    place (accent, 684, 86);
+
+    // drive fx
+    od.setBounds   (766, 156, 60, 42);
+    dist.setBounds (832, 156, 64, 42);
+    fuzz.setBounds (902, 156, 62, 42);
+    driveLed.setBounds (933, 117, 24, 24);
+    drive.setBounds (765, 214, 90, 100);
+    tone.setBounds  (863, 214, 90, 100);
+    level.setBounds (765, 330, 90, 100);
+    mix.setBounds   (863, 330, 90, 100);
+
+    // header / footer
+    presetBar.setBounds (612, 18, 362, 48);
+    meter.setBounds (688, 486, 286, 38);
+}
+
+void SquelchView::paint (juce::Graphics& g)
+{
+    const auto& t = skin.theme;
+    const float w = (float) canvasW;
+
+    // --- background + smiley wallpaper
+    g.fillAll (t.background);
+    for (int row = 0; row < 8; ++row)
+        for (int col = 0; col < 17; ++col)
+        {
+            const juce::Point<float> c (12.0f + 60.5f * (float) col, 90.0f + 60.0f * (float) row + (row == 7 ? -8.0f : 0.0f));
+            drawSmiley (g, c, 16.5f, t.pattern, t.patternFeature, t.patternOutline,
+                        t.patternOutline == t.pattern ? 0.0f : 2.0f);
+        }
+
+    // --- header
+    g.setColour (t.header);
+    g.fillRect (0.0f, 0.0f, w, 78.0f);
+    g.setColour (t.shadow);
+    g.fillRect (0.0f, 76.0f, w, 3.0f);
+
+    drawSmiley (g, layout::logoCentre, layout::logoRadius, t.logoFace, t.logoFeature, t.shadow, 2.5f);
+
+    {   // title with outline + offset shadow
+        juce::GlyphArrangement ga;
+        ga.addLineOfText (skin.font (48.0f), "SQUELCH", 88.0f, 56.0f);
+        juce::Path title;
+        ga.createPath (title);
+        g.setColour (t.shadow);
+        g.fillPath (title, juce::AffineTransform::translation (3.0f, 3.0f));
+        g.strokePath (title, juce::PathStrokeType (5.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        g.setColour (juce::Colours::white);
+        g.fillPath (title);
+    }
+
+    {   // version sticker, slightly tilted
+        juce::Graphics::ScopedSaveState save (g);
+        const juce::Rectangle<float> pill (302.0f, 25.0f, 132.0f, 30.0f);
+        g.addTransform (juce::AffineTransform::rotation (0.035f, pill.getCentreX(), pill.getCentreY()));
+        drawStickerBox (g, pill, 15.0f, t.presetButton, t.shadow, 2.0f, t.shadow, 3.0f);
+        g.setColour (t.presetIcon);
+        g.setFont (skin.font (13.5f));
+        g.drawText (juce::String::fromUTF8 ("acid bass synth \xc2\xb7 v0.3"), pill, juce::Justification::centred, false);
+    }
+
+    // --- panels
+    auto panel = [&] (juce::Rectangle<float> r, const juce::String& title)
+    {
+        drawStickerBox (g, r, 22.0f, t.panel, t.panelOutline, 3.0f, t.shadow, 6.0f);
+        g.setFont (skin.font (15.5f));
+        const float tw = juce::GlyphArrangement::getStringWidth (g.getCurrentFont(), title) + 30.0f;
+        const juce::Rectangle<float> pill (r.getX() + 16.0f, r.getY() + 15.0f, tw, 27.0f);
+        drawStickerBox (g, pill, 13.5f, t.ring, t.shadow, 2.0f, t.shadow, 2.5f);
+        g.setColour (t.onRing);
+        g.drawText (title, pill, juce::Justification::centred, false);
+    };
+    panel (layout::oscPanel, "OSCILLATOR");
+    panel (layout::filterPanel, "FILTER + ENVELOPE");
+    panel (layout::drivePanel, "DRIVE FX");
+
+    g.setColour (t.valueText);
+    g.setFont (skin.font (13.5f, false));
+    g.drawText ("24 dB low-pass", juce::Rectangle<float> (560.0f, 118.0f, 155.0f, 27.0f),
+                juce::Justification::centredRight, false);
+
+    // --- footer: MIDI pill
+    {
+        const juce::Rectangle<float> pill (27.0f, 486.0f, 180.0f, 34.0f);
+        drawStickerBox (g, pill, 17.0f, t.panel, t.panelOutline, 2.5f, t.shadow, 3.5f);
+        g.setColour (t.text);
+        g.setFont (skin.font (14.0f));
+        g.drawText ("MIDI", pill.withTrimmedLeft (14.0f), juce::Justification::centredLeft, false);
+        g.setColour (t.accent);
+        g.fillEllipse (pill.getX() + 56.0f, pill.getCentreY() - 3.5f, 7.0f, 7.0f);
+        g.setColour (t.text);
+        g.drawText (juce::String::fromUTF8 ("mono \xc2\xb7 legato slide"), pill.withTrimmedLeft (70.0f), juce::Justification::centredLeft, false);
+    }
 }
 
 // ------------------------------------------------------------------ editor
 SquelchEditor::SquelchEditor (SquelchProcessor& p)
-    : AudioProcessorEditor (p), processor (p),
-      keyboard (p.keyboardState, juce::MidiKeyboardComponent::horizontalKeyboard)
+    : AudioProcessorEditor (p), proc (p), view (p, skin)
 {
-    setLookAndFeel (&lnf);
+    skin.bold   = juce::Typeface::createSystemTypefaceFor (BinaryData::FredokaBold_ttf, BinaryData::FredokaBold_ttfSize);
+    skin.medium = juce::Typeface::createSystemTypefaceFor (BinaryData::FredokaMedium_ttf, BinaryData::FredokaMedium_ttfSize);
 
-    addKnob (cutoff, "cutoff", "CUTOFF");
-    addKnob (res,    "res",    "RESONANCE");
-    addKnob (envMod, "envmod", "ENV MOD");
-    addKnob (decay,  "decay",  "DECAY");
-    addKnob (accent, "accent", "ACCENT");
-    addKnob (tune,   "tune",   "TUNE");
-    addKnob (slide,  "slide",  "SLIDE TIME");
-    addKnob (sub,    "sub",    "SUB OSC");
-    addKnob (dist,   "dist",   "DISTORTION");
-    addKnob (fuzz,   "fuzz",   "FUZZ");
-    addKnob (volume, "volume", "VOLUME");
+    view.onThemeToggle = [this]
+    {
+        proc.setTheme (proc.getTheme() == 0 ? 1 : 0);
+        applyTheme();
+    };
+    applyTheme();
+    addAndMakeVisible (view);
 
-    waveBox.addItemList ({ "Saw", "Square" }, 1);
-    addAndMakeVisible (waveBox);
-    waveAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (p.apvts, "wave", waveBox);
+    setResizable (true, true);
+    if (auto* c = getConstrainer())
+        c->setFixedAspectRatio ((double) SquelchView::canvasW / (double) SquelchView::canvasH);
+    setResizeLimits (700, 375, 1600, 856);
+    setSize (SquelchView::canvasW, SquelchView::canvasH);
 
-    waveLabel.setText ("WAVE", juce::dontSendNotification);
-    waveLabel.setJustificationType (juce::Justification::centred);
-    waveLabel.setFont (juce::FontOptions (12.0f, juce::Font::bold));
-    addAndMakeVisible (waveLabel);
-
-    // On-screen keys: lower half of each key = normal, upper part = harder (accent)
-    keyboard.setAvailableRange (24, 72);
-    keyboard.setLowestVisibleKey (36);
-    keyboard.setVelocity (0.6f, true);
-    addAndMakeVisible (keyboard);
-
-    setSize (700, 430);
+    startTimerHz (30);
 }
 
 SquelchEditor::~SquelchEditor()
 {
-    setLookAndFeel (nullptr);
+    stopTimer();
 }
 
-void SquelchEditor::addKnob (Knob& k, const juce::String& paramId, const juce::String& name)
+void SquelchEditor::applyTheme()
 {
-    k.slider.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
-    k.slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 72, 18);
-    k.slider.setDoubleClickReturnValue (true, k.slider.getDoubleClickReturnValue());
-    addAndMakeVisible (k.slider);
-    k.attachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, paramId, k.slider);
-
-    k.label.setText (name, juce::dontSendNotification);
-    k.label.setJustificationType (juce::Justification::centred);
-    k.label.setFont (juce::FontOptions (12.0f, juce::Font::bold));
-    addAndMakeVisible (k.label);
-}
-
-void SquelchEditor::paint (juce::Graphics& g)
-{
-    g.fillAll (colours::bg);
-
-    g.setColour (colours::accent);
-    g.setFont (juce::FontOptions (22.0f, juce::Font::bold));
-    g.drawText ("SQUELCH", 20, 10, 200, 30, juce::Justification::centredLeft);
-
-    g.setColour (colours::dim);
-    g.setFont (juce::FontOptions (11.0f));
-    g.drawText ("acid bass voice  ·  v0.2  ·  overlap notes = slide  ·  velocity 100+ = accent",
-                220, 10, getWidth() - 240, 30, juce::Justification::centredRight);
-
-    g.setColour (colours::panel);
-    g.fillRoundedRectangle (12.0f, 48.0f, (float) getWidth() - 24.0f, 140.0f, 8.0f);
-    g.fillRoundedRectangle (12.0f, 196.0f, (float) getWidth() - 24.0f, 140.0f, 8.0f);
+    skin.theme = proc.getTheme() == 1 ? Theme::green() : Theme::red();
+    view.repaint();
 }
 
 void SquelchEditor::resized()
 {
-    auto layoutRow = [] (juce::Rectangle<int> row, std::initializer_list<juce::Component*> sliders,
-                         std::initializer_list<juce::Label*> labels)
-    {
-        const int n = (int) sliders.size();
-        const int w = row.getWidth() / n;
-        auto s = sliders.begin();
-        auto l = labels.begin();
-        for (int i = 0; i < n; ++i, ++s, ++l)
-        {
-            auto cell = row.removeFromLeft (w).reduced (6, 0);
-            (*l)->setBounds (cell.removeFromTop (20));
-            (*s)->setBounds (cell);
-        }
-    };
-
-    auto row1 = juce::Rectangle<int> (12, 56, getWidth() - 24, 126);
-    layoutRow (row1, { &cutoff.slider, &res.slider, &envMod.slider, &decay.slider, &accent.slider },
-                     { &cutoff.label,  &res.label,  &envMod.label,  &decay.label,  &accent.label });
-
-    auto row2 = juce::Rectangle<int> (12, 204, getWidth() - 24, 126);
-    const int w = row2.getWidth() / 7;
-    auto waveCell = row2.removeFromLeft (w).reduced (6, 0);
-    waveLabel.setBounds (waveCell.removeFromTop (20));
-    waveBox.setBounds (waveCell.withSizeKeepingCentre (waveCell.getWidth(), 28).translated (0, -10));
-
-    layoutRow (row2, { &tune.slider, &slide.slider, &sub.slider, &dist.slider, &fuzz.slider, &volume.slider },
-                     { &tune.label,  &slide.label,  &sub.label,  &dist.label,  &fuzz.label,  &volume.label });
-
-    keyboard.setBounds (12, 346, getWidth() - 24, getHeight() - 358);
+    const float scale = (float) getWidth() / (float) SquelchView::canvasW;
+    view.setBounds (0, 0, SquelchView::canvasW, SquelchView::canvasH);
+    view.setTransform (juce::AffineTransform::scale (scale));
 }

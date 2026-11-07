@@ -1,12 +1,14 @@
-// Squelch — drive section: Distortion -> Fuzz -> output volume/soft clip.
+// Squelch — Drive FX: one drive section with three characters, then output volume.
 // Pure C++ (no JUCE). In the plugin it runs at 4x oversampling so heavy
 // settings don't turn into digital fizz (aliasing).
 //
-// Distortion: smooth, symmetric tanh saturation. Thickens and compresses,
-//             keeps the squelch readable. +0..30 dB of drive.
-// Fuzz:       harsher, asymmetric clipping with a rectified (octave-up) edge.
-//             Gets buzzy and broken, like an overdriven pedal. +0..40 dB.
-// Both have automatic make-up gain so turning them up doesn't just get louder.
+//   OD    overdrive: gentle, asymmetric (warm, even harmonics), up to +24 dB.
+//   DIST  distortion: smooth symmetric saturation, up to +36 dB. Dense and compressed.
+//   FUZZ  harsh asymmetric clipping with a rectified octave-up edge, up to +40 dB.
+//
+// DRIVE  how hard it's pushed       TONE  dark (800 Hz) .. bright (16 kHz)
+// LEVEL  wet output, -12 .. +6 dB   MIX   dry .. wet
+// Each mode has automatic make-up gain so DRIVE changes character more than loudness.
 
 #pragma once
 
@@ -15,6 +17,17 @@
 
 namespace squelch
 {
+
+struct DriveParams
+{
+    bool  on     = false;
+    int   mode   = 1;     // 0 = OD, 1 = DIST, 2 = FUZZ
+    float drive  = 0.4f;  // 0..1
+    float tone   = 0.7f;  // 0..1
+    float level  = 0.6667f; // 0..1  (2/3 = 0 dB)
+    float mix    = 1.0f;  // 0..1
+    float volume = 0.7f;  // 0..1  master output
+};
 
 class DriveStage
 {
@@ -26,70 +39,95 @@ public:
         reset();
     }
 
-    void reset() { dcState = dcPrevIn = lpState = 0.0f; sDist = sFuzz = -1.0f; }
-
-    void setParams (float distortion, float fuzz, float volume)
+    void reset()
     {
-        dist = std::clamp (distortion, 0.0f, 1.0f);
-        fuzzAmt = std::clamp (fuzz, 0.0f, 1.0f);
-        vol = volume;
+        dcState = dcPrevIn = lp1 = lp2 = 0.0f;
+        first = true;
     }
+
+    void setParams (const DriveParams& p) { params = p; }
 
     float process (float x)
     {
-        // smooth knob moves (~10 ms) so turning drive doesn't click
-        const float sm = 1.0f - std::exp (-1.0f / (0.01f * fs));
-        if (sDist < 0.0f) { sDist = dist; sFuzz = fuzzAmt; }
-        sDist += (dist - sDist) * sm;
-        sFuzz += (fuzzAmt - sFuzz) * sm;
-
-        // --- Distortion
-        if (sDist > 0.0005f)
+        // smooth knob moves (~10 ms) so turning knobs doesn't click
+        const float targetWet = params.on ? params.mix : 0.0f;
+        if (first)
         {
-            const float g = std::pow (10.0f, sDist * 30.0f / 20.0f);
-            const float wet = std::tanh (x * g) / (1.0f + 2.2f * sDist);
-            x = x + (wet - x) * std::min (1.0f, sDist * 8.0f); // fade in over the first bit of the knob
+            sDrive = params.drive; sTone = params.tone; sLevel = params.level; sWet = targetWet; first = false;
         }
+        const float sm = 1.0f - std::exp (-1.0f / (0.01f * fs));
+        sDrive += (params.drive - sDrive) * sm;
+        sTone  += (params.tone  - sTone)  * sm;
+        sLevel += (params.level - sLevel) * sm;
+        sWet   += (targetWet    - sWet)   * sm;
 
-        // --- Fuzz
-        if (sFuzz > 0.0005f)
+        float out = x;
+
+        if (sWet > 0.0001f)
         {
-            const float g = std::pow (10.0f, sFuzz * 40.0f / 20.0f);
-            float u = x * g + 0.25f * sFuzz;                    // bias -> asymmetry
-            float clipped = u > 0.0f ? std::tanh (u)
-                                     : -0.7f * (1.0f - std::exp (std::max (u * 1.6f, -30.0f)));
-            clipped = std::clamp (clipped * 1.3f, -0.8f, 0.9f); // hard edge on top
-            const float rect = std::abs (clipped) - 0.45f;       // octave-up grit
-            float wet = (1.0f - 0.35f * sFuzz) * clipped + 0.35f * sFuzz * rect;
+            float wet = shape (x, params.mode, sDrive);
 
-            // DC blocker (the bias and rectifier create offset)
+            // DC blocker (asymmetric modes create offset)
             const float dcOut = dcA * (dcState + wet - dcPrevIn);
             dcPrevIn = wet;
             dcState = dcOut;
-            wet = dcOut / (1.0f + 1.6f * sFuzz);
+            wet = dcOut;
 
-            // tame the top end as fuzz increases (~12 kHz down to ~5 kHz)
-            const float lpHz = 12000.0f - 7000.0f * sFuzz;
-            const float a = 1.0f - std::exp (-2.0f * 3.14159265f * lpHz / fs);
-            lpState += (wet - lpState) * a;
+            // TONE: 12 dB/oct low-pass, 800 Hz .. 16 kHz
+            const float lpHz = 800.0f * std::pow (20.0f, sTone);
+            const float a = 1.0f - std::exp (-2.0f * 3.14159265f * std::min (lpHz, 0.45f * fs) / fs);
+            lp1 += (wet - lp1) * a;
+            lp2 += (lp1 - lp2) * a;
+            wet = lp2;
 
-            x = x + (lpState - x) * std::min (1.0f, sFuzz * 8.0f);
+            // LEVEL: -12 .. +6 dB
+            wet *= std::pow (10.0f, (-12.0f + 18.0f * sLevel) / 20.0f);
+
+            out = x + (wet - x) * sWet;
         }
         else
         {
             dcState = dcPrevIn = 0.0f;
-            lpState = x;
+            lp1 = lp2 = x; // keeps the filters ready, so switching on doesn't thump
         }
 
-        // --- output
-        return std::tanh (x * vol * 1.6f);
+        return std::tanh (out * params.volume * 1.6f);
     }
 
 private:
+    static float shape (float x, int mode, float d)
+    {
+        switch (mode)
+        {
+            case 0: // OD
+            {
+                const float g = std::pow (10.0f, d * 24.0f / 20.0f);
+                const float bias = 0.2f * d;
+                return (std::tanh (x * g + bias) - std::tanh (bias)) / (1.0f + 1.4f * d);
+            }
+            case 2: // FUZZ
+            {
+                const float g = std::pow (10.0f, d * 40.0f / 20.0f);
+                const float u = x * g + 0.25f * d;
+                float c = u > 0.0f ? std::tanh (u)
+                                   : -0.7f * (1.0f - std::exp (std::max (u * 1.6f, -30.0f)));
+                c = std::clamp (c * 1.3f, -0.8f, 0.9f);
+                const float rect = std::abs (c) - 0.45f;
+                return ((1.0f - 0.35f * d) * c + 0.35f * d * rect) / (1.0f + 1.6f * d);
+            }
+            default: // DIST
+            {
+                const float g = std::pow (10.0f, d * 36.0f / 20.0f);
+                return std::tanh (x * g) / (1.0f + 2.4f * d);
+            }
+        }
+    }
+
+    DriveParams params;
     float fs = 44100.0f;
-    float dist = 0.0f, fuzzAmt = 0.0f, vol = 0.7f;
-    float sDist = -1.0f, sFuzz = -1.0f;
-    float dcA = 0.999f, dcState = 0.0f, dcPrevIn = 0.0f, lpState = 0.0f;
+    bool first = true;
+    float sDrive = 0, sTone = 0, sLevel = 0, sWet = 0;
+    float dcA = 0.999f, dcState = 0, dcPrevIn = 0, lp1 = 0, lp2 = 0;
 };
 
 } // namespace squelch
