@@ -123,7 +123,7 @@ void SquelchView::resized()
 
     // filter + envelope
     display.setBounds (268, 155, 447, 108);
-    constexpr int labelY = 377;                          // all filter labels share one line
+    static constexpr int labelY = 377;                          // all filter labels share one line
     auto place = [] (Knob& k, int cx, int w)
     {
         const int top = labelY - k.knobSize - 10;
