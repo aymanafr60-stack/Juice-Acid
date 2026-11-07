@@ -192,7 +192,7 @@ void SquelchView::paint (juce::Graphics& g)
         drawStickerBox (g, pill, 15.0f, t.presetButton, t.shadow, 2.0f, t.shadow, 3.0f);
         g.setColour (t.presetIcon);
         g.setFont (skin.font (13.5f));
-        g.drawText (juce::String::fromUTF8 ("acid bass synth \xc2\xb7 v0.3.1"), pill, juce::Justification::centred, false);
+        g.drawText (juce::String::fromUTF8 ("acid bass synth \xc2\xb7 v0.3.2"), pill, juce::Justification::centred, false);
     }
 
     // --- panels
