@@ -67,6 +67,8 @@ SquelchEditor::SquelchEditor (SquelchProcessor& p)
     addKnob (tune,   "tune",   "TUNE");
     addKnob (slide,  "slide",  "SLIDE TIME");
     addKnob (sub,    "sub",    "SUB OSC");
+    addKnob (dist,   "dist",   "DISTORTION");
+    addKnob (fuzz,   "fuzz",   "FUZZ");
     addKnob (volume, "volume", "VOLUME");
 
     waveBox.addItemList ({ "Saw", "Square" }, 1);
@@ -84,7 +86,7 @@ SquelchEditor::SquelchEditor (SquelchProcessor& p)
     keyboard.setVelocity (0.6f, true);
     addAndMakeVisible (keyboard);
 
-    setSize (660, 430);
+    setSize (700, 430);
 }
 
 SquelchEditor::~SquelchEditor()
@@ -95,7 +97,7 @@ SquelchEditor::~SquelchEditor()
 void SquelchEditor::addKnob (Knob& k, const juce::String& paramId, const juce::String& name)
 {
     k.slider.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
-    k.slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 80, 18);
+    k.slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 72, 18);
     k.slider.setDoubleClickReturnValue (true, k.slider.getDoubleClickReturnValue());
     addAndMakeVisible (k.slider);
     k.attachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.apvts, paramId, k.slider);
@@ -116,7 +118,7 @@ void SquelchEditor::paint (juce::Graphics& g)
 
     g.setColour (colours::dim);
     g.setFont (juce::FontOptions (11.0f));
-    g.drawText ("acid bass voice  ·  v0.1  ·  overlap notes = slide  ·  velocity 100+ = accent",
+    g.drawText ("acid bass voice  ·  v0.2  ·  overlap notes = slide  ·  velocity 100+ = accent",
                 220, 10, getWidth() - 240, 30, juce::Justification::centredRight);
 
     g.setColour (colours::panel);
@@ -146,13 +148,13 @@ void SquelchEditor::resized()
                      { &cutoff.label,  &res.label,  &envMod.label,  &decay.label,  &accent.label });
 
     auto row2 = juce::Rectangle<int> (12, 204, getWidth() - 24, 126);
-    const int w = row2.getWidth() / 5;
-    auto waveCell = row2.removeFromLeft (w).reduced (12, 0);
+    const int w = row2.getWidth() / 7;
+    auto waveCell = row2.removeFromLeft (w).reduced (6, 0);
     waveLabel.setBounds (waveCell.removeFromTop (20));
     waveBox.setBounds (waveCell.withSizeKeepingCentre (waveCell.getWidth(), 28).translated (0, -10));
 
-    layoutRow (row2, { &tune.slider, &slide.slider, &sub.slider, &volume.slider },
-                     { &tune.label,  &slide.label,  &sub.label,  &volume.label });
+    layoutRow (row2, { &tune.slider, &slide.slider, &sub.slider, &dist.slider, &fuzz.slider, &volume.slider },
+                     { &tune.label,  &slide.label,  &sub.label,  &dist.label,  &fuzz.label,  &volume.label });
 
     keyboard.setBounds (12, 346, getWidth() - 24, getHeight() - 358);
 }

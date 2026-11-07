@@ -39,6 +39,12 @@ APVTS::ParameterLayout SquelchProcessor::createLayout()
     layout.add (std::make_unique<AudioParameterFloat> (ParameterID { "volume", 1 }, "Volume",
                                                        NormalisableRange<float> (0.0f, 1.0f), 0.7f,
                                                        AudioParameterFloatAttributes().withStringFromValueFunction (pct)));
+    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { "dist", 1 }, "Distortion",
+                                                       NormalisableRange<float> (0.0f, 1.0f), 0.0f,
+                                                       AudioParameterFloatAttributes().withStringFromValueFunction (pct)));
+    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { "fuzz", 1 }, "Fuzz",
+                                                       NormalisableRange<float> (0.0f, 1.0f), 0.0f,
+                                                       AudioParameterFloatAttributes().withStringFromValueFunction (pct)));
     return layout;
 }
 
@@ -56,6 +62,8 @@ SquelchProcessor::SquelchProcessor()
     pSlide  = apvts.getRawParameterValue ("slide");
     pSub    = apvts.getRawParameterValue ("sub");
     pVolume = apvts.getRawParameterValue ("volume");
+    pDist   = apvts.getRawParameterValue ("dist");
+    pFuzz   = apvts.getRawParameterValue ("fuzz");
 }
 
 bool SquelchProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
@@ -64,9 +72,14 @@ bool SquelchProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
     return out == juce::AudioChannelSet::mono() || out == juce::AudioChannelSet::stereo();
 }
 
-void SquelchProcessor::prepareToPlay (double sampleRate, int)
+void SquelchProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     voice.prepare (sampleRate);
+    oversampling.initProcessing ((size_t) samplesPerBlock);
+    oversampling.reset();
+    drive.prepare (sampleRate * (double) oversampling.getOversamplingFactor());
+    monoBuffer.setSize (1, samplesPerBlock);
+    setLatencySamples ((int) std::round (oversampling.getLatencyInSamples()));
     keyboardState.reset();
 }
 
@@ -82,8 +95,8 @@ void SquelchProcessor::updateVoiceParams()
     p.accent      = pAccent->load();
     p.slideTimeMs = pSlide->load();
     p.subLevel    = pSub->load();
-    p.volume      = pVolume->load();
     voice.setParams (p);
+    drive.setParams (pDist->load(), pFuzz->load(), pVolume->load());
 }
 
 void SquelchProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
@@ -97,7 +110,10 @@ void SquelchProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
 
     updateVoiceParams();
 
-    auto* left = buffer.getWritePointer (0);
+    if (monoBuffer.getNumSamples() < numSamples)
+        monoBuffer.setSize (1, numSamples, false, false, true); // only if the host breaks its promise
+
+    auto* mono = monoBuffer.getWritePointer (0);
     int pos = 0;
 
     // sample-accurate MIDI: render up to each event, then apply it
@@ -107,7 +123,7 @@ void SquelchProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
         const int evPos = juce::jlimit (0, numSamples, meta.samplePosition);
 
         for (; pos < evPos; ++pos)
-            left[pos] = voice.processSample();
+            mono[pos] = voice.processSample();
 
         if (msg.isNoteOn())
             voice.noteOn (msg.getNoteNumber(), msg.getVelocity());
@@ -118,11 +134,19 @@ void SquelchProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
     }
 
     for (; pos < numSamples; ++pos)
-        left[pos] = voice.processSample();
+        mono[pos] = voice.processSample();
 
-    // mono synth -> copy to the other channel(s)
-    for (int ch = 1; ch < buffer.getNumChannels(); ++ch)
-        buffer.copyFrom (ch, 0, buffer, 0, 0, numSamples);
+    // distortion / fuzz / volume at 4x sample rate to keep heavy settings clean
+    juce::dsp::AudioBlock<float> block (monoBuffer.getArrayOfWritePointers(), 1, (size_t) numSamples);
+    auto up = oversampling.processSamplesUp (block);
+    auto* u = up.getChannelPointer (0);
+    for (size_t i = 0; i < up.getNumSamples(); ++i)
+        u[i] = drive.process (u[i]);
+    oversampling.processSamplesDown (block);
+
+    // mono synth -> every output channel
+    for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+        buffer.copyFrom (ch, 0, monoBuffer, 0, 0, numSamples);
 }
 
 void SquelchProcessor::getStateInformation (juce::MemoryBlock& destData)

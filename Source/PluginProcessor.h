@@ -1,7 +1,9 @@
 #pragma once
 
 #include <juce_audio_utils/juce_audio_utils.h>
+#include <juce_dsp/juce_dsp.h>
 #include "AcidVoice.h"
+#include "Drive.h"
 
 class SquelchProcessor : public juce::AudioProcessor
 {
@@ -42,6 +44,9 @@ private:
     void updateVoiceParams();
 
     squelch::AcidVoice voice;
+    squelch::DriveStage drive;
+    juce::dsp::Oversampling<float> oversampling { 1, 2, juce::dsp::Oversampling<float>::filterHalfBandPolyphaseIIR, true };
+    juce::AudioBuffer<float> monoBuffer;
 
     std::atomic<float>* pWave   = nullptr;
     std::atomic<float>* pTune   = nullptr;
@@ -53,6 +58,8 @@ private:
     std::atomic<float>* pSlide  = nullptr;
     std::atomic<float>* pSub    = nullptr;
     std::atomic<float>* pVolume = nullptr;
+    std::atomic<float>* pDist   = nullptr;
+    std::atomic<float>* pFuzz   = nullptr;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SquelchProcessor)
 };

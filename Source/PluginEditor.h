@@ -32,7 +32,7 @@ private:
     SquelchProcessor& processor;
     SquelchLookAndFeel lnf;
 
-    Knob cutoff, res, envMod, decay, accent, tune, slide, sub, volume;
+    Knob cutoff, res, envMod, decay, accent, tune, slide, sub, dist, fuzz, volume;
 
     juce::ComboBox waveBox;
     juce::Label    waveLabel;

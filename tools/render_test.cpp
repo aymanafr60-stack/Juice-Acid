@@ -1,6 +1,8 @@
 // Offline test: renders an acid riff through AcidVoice to a WAV file and
 // reports peak level / NaNs. Build: g++ -O2 -std=c++17 -I../Source render_test.cpp
 #include "AcidVoice.h"
+#include "Drive.h"
+#include <cstdlib>
 #include <cstdio>
 #include <cstdint>
 #include <vector>
@@ -37,6 +39,10 @@ int main (int argc, char** argv)
 
     squelch::AcidVoice v;
     v.prepare (sr);
+    squelch::DriveStage drive;
+    drive.prepare (sr); // no oversampling in this quick test
+    drive.setParams (argc > 3 ? (float) std::atof (argv[3]) : 0.0f,
+                     argc > 4 ? (float) std::atof (argv[4]) : 0.0f, 0.7f);
     squelch::VoiceParams p;
     p.waveform = argc > 1 ? std::atoi (argv[1]) : 0;
     p.resonance = 0.8f; p.envMod = 0.55f; p.decay = 0.35f; p.accent = 0.75f; p.subLevel = 0.0f;
@@ -68,7 +74,7 @@ int main (int argc, char** argv)
         for (int i = 0; i < stepLen; ++i)
         {
             if (i == gateLen && ! st.rest) { v.noteOff (st.note); prevNote = -1; }
-            float y = v.processSample();
+            float y = drive.process (v.processSample());
             if (! std::isfinite (y)) { ++bad; y = 0; }
             peak = std::max (peak, std::abs (y));
             out.push_back (y);
@@ -77,6 +83,7 @@ int main (int argc, char** argv)
     }
 
     writeWav (argc > 2 ? argv[2] : "acid_test.wav", out, sr);
-    std::printf ("samples=%zu peak=%.3f nonfinite=%d\n", out.size(), peak, bad);
+    double sq = 0; for (float x : out) sq += (double) x * x;
+    std::printf ("peak=%.3f rms=%.3f nonfinite=%d\n", peak, std::sqrt (sq / out.size()), bad);
     return bad ? 1 : 0;
 }

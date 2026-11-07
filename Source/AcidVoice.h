@@ -35,7 +35,6 @@ struct VoiceParams
     float accent       = 0.6f;  // 0 .. 1
     float slideTimeMs  = 60.0f; // 10 .. 500
     float subLevel     = 0.0f;  // 0 .. 1
-    float volume       = 0.7f;  // 0 .. 1
     int   accentThreshold = 100; // MIDI velocity at/above which a note is accented
 };
 
@@ -215,8 +214,8 @@ public:
         hpPrevIn = y;
         hpState = hpOut;
 
-        // --- output
-        return softClip (hpOut * params.volume * 1.6f);
+        // --- output (raw; distortion, fuzz, volume and clipping happen in DriveStage)
+        return hpOut;
     }
 
     bool isActive() const { return ampStage != AmpStage::idle; }
@@ -236,11 +235,6 @@ private:
         if (t < dt)        { t /= dt;               return t + t - t * t - 1.0f; }
         if (t > 1.0f - dt) { t = (t - 1.0f) / dt;   return t * t + t + t + 1.0f; }
         return 0.0f;
-    }
-
-    static float softClip (float x)
-    {
-        return std::tanh (x);
     }
 
     // Zero-delay-feedback 4-pole ladder (Zavalishin topology) with a saturating
