@@ -93,6 +93,7 @@ public:
 
     // Lets the editor show a different value text or label (e.g. PW vs DETUNE).
     std::function<juce::String()> valueText;
+    void setTooltip (const juce::String& tip) { slider.setTooltip (tip); }
     void setLabel (const juce::String& l) { if (l != label) { label = l; repaint(); } }
 
     int knobSize = 54;

@@ -27,3 +27,25 @@ THE INTERFACE
   TONE = dark..bright, LEVEL = drive output, MIX = dry..wet.
 - OUT bar: shows output level. Drag the white handle to set the volume.
 - Double-click any knob to reset it. Drag the window's bottom-right corner to resize.
+
+SEQ PAGE (v0.4)
+Click SEQ at the top to switch pages. Choose a mode:
+- OFF: your keyboard plays the synth directly (as before).
+- PATTERN: plays the 16 steps. It follows FL's transport when FL is playing;
+  otherwise press PLAY to run it on its own clock (BPM knob).
+  Hold a key to transpose the pattern (C4 = as written).
+- ARP: hold notes on your keyboard and it arpeggiates them.
+
+Editing steps:
+- NOTE: drag up/down or use the mouse wheel. Double-click resets to C.
+- OCT: click to cycle (- / UP / DN).
+- ACC, SLIDE, ON: click to toggle; click and drag across steps to set several.
+- LENGTH sets how many steps loop (odd lengths give rolling patterns).
+
+ARP controls: MODE (Up, Down, Up-Down, Random, As Played), OCTAVE (1-4),
+ACCENT (Off, every 2/3/4/5/7 steps, or Auto), SLIDE (how often notes glide),
+LATCH (keeps playing after you let go), CHORD (one key = a chord from KEY + SCALE).
+RATE, SWING and GATE apply to both PATTERN and ARP.
+
+PRINT TO STEPS copies what the arp is playing into the pattern.
+DRAG MIDI: drag it into FL's piano roll, channel rack or playlist to drop the pattern in as MIDI.

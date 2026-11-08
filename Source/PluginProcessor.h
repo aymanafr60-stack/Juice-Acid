@@ -4,6 +4,7 @@
 #include <juce_dsp/juce_dsp.h>
 #include "AcidVoice.h"
 #include "Drive.h"
+#include "Sequencer.h"
 
 class SquelchProcessor : public juce::AudioProcessor
 {
@@ -41,6 +42,11 @@ public:
     int  getPresetIndex() const;
     int  getTheme() const;          // 0 = red, 1 = green
     void setTheme (int theme);
+    int  getPage() const;           // 0 = synth, 1 = seq
+    void setPage (int page);
+
+    squelch::Sequencer seq;
+    juce::File writePatternMidi() const; // for dragging the pattern into the DAW
 
     std::atomic<float> displayCutoffHz { 1000.0f }; // live filter cutoff for the display
     std::atomic<float> outputPeak { 0.0f };         // max |sample| since the editor last read it
@@ -51,6 +57,14 @@ public:
 
 private:
     void updateParams();
+    squelch::SeqSettings readSeqSettings() const;
+
+    struct VoiceSink : squelch::NoteSink
+    {
+        squelch::AcidVoice* v = nullptr;
+        void seqNoteOn (int n, int vel) override { v->noteOn (n, vel); }
+        void seqNoteOff (int n) override         { v->noteOff (n); }
+    } sink;
 
     squelch::AcidVoice voice;
     squelch::DriveStage drive;
@@ -66,6 +80,15 @@ private:
     std::atomic<float>* pDrive = nullptr;  std::atomic<float>* pTone = nullptr;
     std::atomic<float>* pLevel = nullptr;  std::atomic<float>* pMix = nullptr;
     std::atomic<float>* pVolume = nullptr;
+
+    std::atomic<float>* sMode = nullptr;  std::atomic<float>* sPlay = nullptr;
+    std::atomic<float>* sLen = nullptr;   std::atomic<float>* sRate = nullptr;
+    std::atomic<float>* sSwing = nullptr; std::atomic<float>* sGate = nullptr;
+    std::atomic<float>* sBpm = nullptr;   std::atomic<float>* sKey = nullptr;
+    std::atomic<float>* sScale = nullptr; std::atomic<float>* aMode = nullptr;
+    std::atomic<float>* aOct = nullptr;   std::atomic<float>* aAcc = nullptr;
+    std::atomic<float>* aSlide = nullptr; std::atomic<float>* aLatch = nullptr;
+    std::atomic<float>* aChord = nullptr;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SquelchProcessor)
 };
