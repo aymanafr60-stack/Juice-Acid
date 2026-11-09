@@ -1,6 +1,7 @@
 #include "PluginEditor.h"
 #include "Presets.h"
 #include "BinaryData.h"
+#include "Generator.h"
 
 using namespace squelch::ui;
 
@@ -35,6 +36,7 @@ SquelchView::SquelchView (SquelchProcessor& p, Skin& s)
       synthTab (s, "SYNTH"), seqTab (s, "SEQ"),
       seqOff (s, "OFF"), seqPattern (s, "PATTERN"), seqArp (s, "ARP"),
       play (s, "PLAY", param ("seq_play")), clear (s, "CLEAR"),
+      generate (s, "GENERATE"), mutate (s, "MUTATE"),
       dragMidi (s), grid (s, p.seq),
       length (s, param ("seq_len"), "LENGTH"), rate (s, param ("seq_rate"), "RATE"),
       swing (s, param ("seq_swing"), "SWING"), gate (s, param ("seq_gate"), "GATE"),
@@ -50,7 +52,7 @@ SquelchView::SquelchView (SquelchProcessor& p, Skin& s)
     synthPage = { &saw, &square, &pulse, &super, &tune, &pw, &sub, &slide,
                   &display, &envMod, &cutoff, &res, &decay, &accent,
                   &od, &dist, &fuzz, &driveLed, &drive, &tone, &level, &mix };
-    seqPage   = { &seqOff, &seqPattern, &seqArp, &play, &clear, &dragMidi, &grid,
+    seqPage   = { &seqOff, &seqPattern, &seqArp, &play, &clear, &generate, &mutate, &dragMidi, &grid,
                   &length, &rate, &swing, &gate, &bpm, &key, &scale,
                   &latch, &chord, &arpMode, &arpOct, &arpAcc, &arpSlide, &print };
     for (auto* c : synthPage) addChildComponent (c);
@@ -69,6 +71,11 @@ SquelchView::SquelchView (SquelchProcessor& p, Skin& s)
     grid.getLength = [this] { return (int) std::round (proc.apvts.getRawParameterValue ("seq_len")->load()); };
     dragMidi.makeFile = [this] { return proc.writePatternMidi(); };
     clear.onClick = [this] { clearPattern(); };
+    generate.onClick = [this] { generateLine (false); };
+    mutate.onClick   = [this] { generateLine (true); };
+    generate.setToggleState (true, juce::dontSendNotification); // always highlighted
+    generate.setTooltip ("Write a new acid line in the chosen KEY and SCALE");
+    mutate.setTooltip ("Change 2-3 steps of the current line, keep the rest");
     print.onClick = [this] { proc.seq.printRequest.store (true); };
     lastPrintOk = proc.seq.printOk.load();
     lastPrintFail = proc.seq.printFail.load();
@@ -133,6 +140,26 @@ void SquelchView::clearPattern()
     grid.repaint();
 }
 
+void SquelchView::generateLine (bool small)
+{
+    const int keyIndex   = (int) proc.apvts.getRawParameterValue ("key")->load();
+    const int scaleIndex = (int) proc.apvts.getRawParameterValue ("scale")->load();
+    const auto seed = (uint32_t) juce::Random::getSystemRandom().nextInt();
+
+    if (small)
+        squelch::AcidGenerator::mutate (proc.seq, keyIndex, scaleIndex,
+                                        (int) std::round (proc.apvts.getRawParameterValue ("seq_len")->load()), seed);
+    else
+        squelch::AcidGenerator::generate (proc.seq, keyIndex, scaleIndex, seed);
+
+    // a new line is only useful if the pattern plays it
+    if (auto* m = proc.apvts.getParameter ("seq_mode"))
+        if ((int) std::round (m->convertFrom0to1 (m->getValue())) != squelch::seqPattern)
+            m->setValueNotifyingHost (m->convertTo0to1 ((float) squelch::seqPattern));
+
+    grid.repaint();
+}
+
 juce::RangedAudioParameter& SquelchView::param (const char* id)
 {
     auto* p = proc.apvts.getParameter (id);
@@ -184,7 +211,7 @@ void SquelchView::tick()
         if (fail != lastPrintFail) { lastPrintFail = fail; status = "hold notes first";  statusUntil = juce::Time::getMillisecondCounter() + 2500; }
         if (status.isNotEmpty() && juce::Time::getMillisecondCounter() > statusUntil) status = {};
         repaint (750, 110, 222, 40);
-        repaint (27, 486, 190, 40);
+        repaint (27, 486, 320, 40);
     }
 }
 
@@ -237,6 +264,8 @@ void SquelchView::resized()
     play.setBounds       (322, 152, 82, 42);
     clear.setBounds      (410, 152, 86, 42);
     dragMidi.setBounds   (572, 152, 145, 42);
+    generate.setBounds   (494, 111, 124, 37);
+    mutate.setBounds     (624, 111, 93, 37);
     grid.setBounds       (46, 204, 670, 168);
     {
         int x = 46;
@@ -303,7 +332,7 @@ void SquelchView::paint (juce::Graphics& g)
         drawStickerBox (g, pill, 15.0f, t.presetButton, t.shadow, 2.0f, t.shadow, 3.0f);
         g.setColour (t.presetIcon);
         g.setFont (skin.font (13.5f));
-        g.drawText (juce::String::fromUTF8 ("acid bass synth \xc2\xb7 v0.4"), pill, juce::Justification::centred, false);
+        g.drawText (juce::String::fromUTF8 ("acid bass synth \xc2\xb7 v0.5"), pill, juce::Justification::centred, false);
     }
 
     // --- panels
@@ -333,11 +362,6 @@ void SquelchView::paint (juce::Graphics& g)
         panel (layout::stepsPanel, "SEQUENCER");
         panel (layout::arpPanel, "ARP");
 
-        g.setColour (t.valueText);
-        g.setFont (skin.font (13.5f, false));
-        g.drawText (proc.seq.hostClock.load() ? "following FL's tempo" : "internal clock (BPM knob)",
-                    juce::Rectangle<float> (420.0f, 118.0f, 295.0f, 27.0f), juce::Justification::centredRight, false);
-
         if (status.isNotEmpty())
         {
             g.setColour (t.accent);
@@ -348,19 +372,23 @@ void SquelchView::paint (juce::Graphics& g)
 
     // --- footer: MIDI pill
     {
-        const juce::Rectangle<float> pill (27.0f, 486.0f, 180.0f, 34.0f);
+        const int mode = (int) proc.apvts.getRawParameterValue ("seq_mode")->load();
+        const juce::Rectangle<float> pill (27.0f, 486.0f, mode == 0 ? 180.0f : 300.0f, 34.0f);
         drawStickerBox (g, pill, 17.0f, t.panel, t.panelOutline, 2.5f, t.shadow, 3.5f);
         g.setColour (t.text);
         g.setFont (skin.font (14.0f));
-        const int mode = (int) proc.apvts.getRawParameterValue ("seq_mode")->load();
         const bool running = proc.seq.currentStep.load() >= 0;
         g.drawText (mode == 0 ? "MIDI" : "SEQ", pill.withTrimmedLeft (14.0f), juce::Justification::centredLeft, false);
         g.setColour (mode == 0 || running ? t.accent : t.valueText.withAlpha (0.5f));
         g.fillEllipse (pill.getX() + 56.0f, pill.getCentreY() - 3.5f, 7.0f, 7.0f);
         g.setColour (t.text);
+        const juce::String clock = proc.seq.hostClock.load()
+            ? juce::String ("FL tempo")
+            : juce::String ((int) proc.apvts.getRawParameterValue ("seq_bpm")->load()) + " bpm";
+        const juce::String dot = juce::String::fromUTF8 (" \xc2\xb7 ");
         const juce::String text = mode == 0 ? juce::String::fromUTF8 ("mono \xc2\xb7 legato slide")
-                                : mode == 1 ? juce::String (running ? "pattern playing" : "pattern stopped")
-                                            : juce::String (running ? "arp playing" : "arp: hold notes");
+                                : mode == 1 ? juce::String (running ? "pattern playing" : "pattern stopped") + dot + clock
+                                            : juce::String (running ? "arp playing" : "arp: hold notes") + dot + clock;
         g.drawText (text, pill.withTrimmedLeft (70.0f), juce::Justification::centredLeft, false);
     }
 }

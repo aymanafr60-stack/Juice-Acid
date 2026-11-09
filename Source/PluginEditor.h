@@ -23,6 +23,7 @@ private:
     void updateShapeKnob (int wave);
     void setPage (int page);
     void clearPattern();
+    void generateLine (bool small);
     juce::RangedAudioParameter& param (const char* id);
 
     SquelchProcessor& proc;
@@ -49,7 +50,7 @@ private:
     // seq page
     squelch::ui::PillButton seqOff, seqPattern, seqArp;
     squelch::ui::ParamPill play;
-    squelch::ui::PillButton clear;
+    squelch::ui::PillButton clear, generate, mutate;
     squelch::ui::DragMidiButton dragMidi;
     squelch::ui::StepGrid grid;
     squelch::ui::Knob length, rate, swing, gate, bpm, key, scale;

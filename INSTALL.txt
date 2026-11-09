@@ -33,7 +33,7 @@ Click SEQ at the top to switch pages. Choose a mode:
 - OFF: your keyboard plays the synth directly (as before).
 - PATTERN: plays the 16 steps. It follows FL's transport when FL is playing;
   otherwise press PLAY to run it on its own clock (BPM knob).
-  Hold a key to transpose the pattern (C4 = as written).
+  Hold a key to transpose the pattern (middle C = as written; FL calls it C5).
 - ARP: hold notes on your keyboard and it arpeggiates them.
 
 Editing steps:
@@ -49,3 +49,10 @@ RATE, SWING and GATE apply to both PATTERN and ARP.
 
 PRINT TO STEPS copies what the arp is playing into the pattern.
 DRAG MIDI: drag it into FL's piano roll, channel rack or playlist to drop the pattern in as MIDI.
+
+GENERATE / MUTATE (v0.5)
+- GENERATE writes a new acid line into the 16 steps, using the KEY and SCALE knobs.
+  It follows classic acid habits (repeating motif, root-heavy, octave jumps, a few rests,
+  accents and slides placed musically) instead of random notes. Click again for another.
+- MUTATE changes 2-3 steps of the current line and keeps the rest (step 1 stays put).
+- Both switch the sequencer to PATTERN so you hear the result.
