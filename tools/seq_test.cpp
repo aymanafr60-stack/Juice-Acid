@@ -123,6 +123,24 @@ int main()
         check (! r.ev.empty() && ! r.ev.back().on, "PLAY off -> held note released");
     }
 
+    { // 9. PATTERN mode: holding a key starts the pattern from step 1, transposed; release stops it
+        Sequencer s; s.prepare (sr); Rec r;
+        SeqSettings st; st.mode = seqPattern; st.bpm = 120;   // PLAY off, host stopped
+        run (s, st, r, 200, 0, 0, { {1000, {72, true}}, {60000, {72, false}} });
+        check (! r.ev.empty() && r.ev[0].on && r.ev[0].t == 1000 && r.ev[0].n == 36 + 12,
+               "key press starts step 1 at once, transposed (+12 for C an octave up)");
+        long lastOn = 0; for (auto& e : r.ev) if (e.on) lastOn = e.t;
+        check (lastOn < 60000 && ! r.ev.back().on, "releasing the key stops the pattern");
+    }
+    { // 10. PATTERN with PLAY on: a key only transposes, doesn't restart
+        Sequencer s; s.prepare (sr); Rec r;
+        SeqSettings st; st.mode = seqPattern; st.bpm = 120; st.play = true;
+        run (s, st, r, 100, 0, 0, { {30000, {60, true}}, {40000, {60, false}} });
+        bool onGrid = true, playingAfter = false;
+        for (auto& e : r.ev) { if (e.on && e.t % 6000 != 0) onGrid = false; if (e.on && e.t > 40000) playingAfter = true; }
+        check (onGrid && playingAfter, "with PLAY on, a key doesn't restart the pattern, it keeps running in time");
+    }
+
     std::printf (fails ? "\n%d FAILED\n" : "\nall passed\n", fails);
     return fails ? 1 : 0;
 }

@@ -165,7 +165,7 @@ public:
 
         // should the sequencer be running?
         bool shouldRun = false;
-        if (settings.mode == seqPattern) shouldRun = useHost || settings.play;
+        if (settings.mode == seqPattern) shouldRun = useHost || settings.play || ! held.empty(); // a held key also plays it
         if (settings.mode == seqArp)     shouldRun = ! source().empty();
 
         if (shouldRun && (! running || rateChanged || useHost != lastUseHost))
@@ -203,8 +203,8 @@ public:
             if (settings.latch) addUnique (latched, note);
             ++physicalHeld;
 
-            // arp starting from silence on the internal clock: start the grid now
-            if (settings.mode == seqArp && ! running)
+            // arp, or pattern triggered by a key, starting from silence: start the grid now (step 1)
+            if ((settings.mode == seqArp || settings.mode == seqPattern) && ! running)
             {
                 running = true;
                 if (! useHost) { internalPpq = 0.0; clockPpq = 0.0; }
@@ -216,7 +216,8 @@ public:
             held.erase (std::remove (held.begin(), held.end(), note), held.end());
             physicalHeld = std::max (0, physicalHeld - 1);
 
-            if (settings.mode == seqArp && source().empty() && running)
+            const bool patternKeyOnly = settings.mode == seqPattern && ! useHost && ! settings.play;
+            if (((settings.mode == seqArp && source().empty()) || (patternKeyOnly && held.empty())) && running)
             {
                 running = false;
                 stopSounding (sink);

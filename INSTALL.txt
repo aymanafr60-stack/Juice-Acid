@@ -31,9 +31,11 @@ THE INTERFACE
 SEQ PAGE (v0.4)
 Click SEQ at the top to switch pages. Choose a mode:
 - OFF: your keyboard plays the synth directly (as before).
-- PATTERN: plays the 16 steps. It follows FL's transport when FL is playing;
-  otherwise press PLAY to run it on its own clock (BPM knob).
-  Hold a key to transpose the pattern (middle C = as written; FL calls it C5).
+- PATTERN: plays the 16 steps. Three ways to start it:
+  * hold a key on your keyboard or a note in the piano roll: it plays from step 1 in that key
+    (middle C = as written; FL calls it C5) and stops when you let go
+  * press PLAY: runs on its own clock (BPM)
+  * start FL: follows FL's tempo; keys then transpose it
 - ARP: hold notes on your keyboard and it arpeggiates them.
 
 Editing steps:

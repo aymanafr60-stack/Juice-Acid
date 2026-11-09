@@ -135,7 +135,7 @@ SquelchView::SquelchView (SquelchProcessor& p, Skin& s)
     clear.setTooltip ("Reset all 16 steps to plain C notes");
     generate.setTooltip ("Write a new acid line in the chosen KEY and SCALE");
     mutate.setTooltip ("Change 2-3 steps of the current line, keep the rest");
-    modePattern.setTooltip ("Play the 16-step pattern. Follows FL's transport, or press PLAY. Hold a key to transpose");
+    modePattern.setTooltip ("Play the 16-step pattern: hold a key (middle C = as written, other keys transpose), press PLAY, or start FL");
     modeArp.setTooltip ("Arpeggiator: hold notes on your keyboard");
     latch.setTooltip ("Keep the arp going after you let go of the keys");
     chord.setTooltip ("Hold one key: the arp plays a chord built from KEY and SCALE");
@@ -461,7 +461,7 @@ void SquelchView::paintFooter (juce::Graphics& g)
     if (toast.isNotEmpty())               status = toast;
     else if (mode == squelch::seqOff)     status = "off";
     else if (mode == squelch::seqPattern) status = running ? "playing" + sep + "step " + juce::String (step + 1) + sep + clock
-                                                           : "stopped" + sep + clock;
+                                                           : "hold a key or press PLAY" + sep + clock;
     else                                  status = running ? "arp" + sep + "step " + juce::String (step + 1) + sep + clock
                                                            : "arp" + sep + "hold notes" + sep + clock;
     dot (218.0f, running);
