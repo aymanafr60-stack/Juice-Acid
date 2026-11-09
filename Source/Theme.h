@@ -19,6 +19,7 @@ struct Theme
     juce::Colour display, displayOutline;
     juce::Colour logoFace, logoFeature;
     juce::Colour presetButton, presetIcon, presetDisplay;
+    bool chromeHeader = false;   // draw the header as a metallic gradient instead of a flat colour
 
     static Theme red()
     {
@@ -40,6 +41,31 @@ struct Theme
         t.logoFace = juce::Colour (0xff111111);  t.logoFeature = juce::Colour (0xffe8303a);
         t.presetButton = juce::Colour (0xff161616); t.presetIcon = juce::Colours::white;
         t.presetDisplay = juce::Colour (0xff111111);
+        return t;
+    }
+
+    // Y2K / acid / rave: chrome header, deep indigo, acid-lime "on" colour, hot-magenta rings.
+    static Theme y2k()
+    {
+        Theme t;
+        t.header = juce::Colour (0xffc9cfe8);    t.chromeHeader = true;
+        t.background = juce::Colour (0xff0a0718);
+        t.pattern = juce::Colour (0xff23104a);   t.patternFeature = juce::Colour (0xff0a0718);
+        t.patternOutline = juce::Colour (0xff23104a);
+        t.panel = juce::Colour (0xff120e26);     t.panelOutline = juce::Colour (0xff7a5cff);
+        t.shadow = juce::Colour (0xff000000);
+        t.text = juce::Colour (0xfff0eeff);      t.valueText = juce::Colour (0xffa59ed6);
+        t.titleText = juce::Colours::white;
+        t.accent = juce::Colour (0xffc8ff2e);    t.ring = juce::Colour (0xffff2bd6);
+        t.onRing = juce::Colour (0xff0a0718);
+        t.knob = juce::Colour (0xff201a3d);      t.knobOutline = juce::Colour (0xff7a5cff);
+        t.knobDot = juce::Colours::white;        t.bigKnobDot = juce::Colour (0xffc8ff2e);
+        t.button = juce::Colour (0xff201a3d);    t.buttonOutline = juce::Colour (0xff3d3175);
+        t.buttonText = juce::Colour (0xfff0eeff);
+        t.display = juce::Colour (0xff05030f);   t.displayOutline = juce::Colour (0xff7a5cff);
+        t.logoFace = juce::Colour (0xffffe600);  t.logoFeature = juce::Colour (0xff0a0718);
+        t.presetButton = juce::Colour (0xff120e26); t.presetIcon = juce::Colour (0xfff0eeff);
+        t.presetDisplay = juce::Colour (0xff05030f);
         return t;
     }
 

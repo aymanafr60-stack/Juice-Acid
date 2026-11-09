@@ -365,8 +365,25 @@ void SquelchView::paint (juce::Graphics& g)
         }
 
     // --- header
-    g.setColour (t.header);
-    g.fillRect (0.0f, 0.0f, w, 78.0f);
+    if (t.chromeHeader)
+    {
+        // brushed-chrome look: bright top, darker band, light bottom edge, with a faint violet/cyan sheen
+        juce::ColourGradient chrome (juce::Colour (0xfff6f8ff), 0.0f, 0.0f, juce::Colour (0xffe4e9fb), 0.0f, 78.0f, false);
+        chrome.addColour (0.35, juce::Colour (0xffc3c9e6));
+        chrome.addColour (0.55, juce::Colour (0xff8f97c4));
+        chrome.addColour (0.78, juce::Colour (0xffcfd5f0));
+        g.setGradientFill (chrome);
+        g.fillRect (0.0f, 0.0f, w, 78.0f);
+        juce::ColourGradient sheen (juce::Colour (0x337a5cff), 0.0f, 0.0f, juce::Colour (0x3300e5ff), w, 0.0f, false);
+        sheen.addColour (0.5, juce::Colour (0x00ffffff));
+        g.setGradientFill (sheen);
+        g.fillRect (0.0f, 0.0f, w, 78.0f);
+    }
+    else
+    {
+        g.setColour (t.header);
+        g.fillRect (0.0f, 0.0f, w, 78.0f);
+    }
     g.setColour (t.shadow);
     g.fillRect (0.0f, 76.0f, w, 3.0f);
 
@@ -475,7 +492,7 @@ SquelchEditor::SquelchEditor (SquelchProcessor& p)
 
     view.onThemeToggle = [this]
     {
-        proc.setTheme (proc.getTheme() == 0 ? 1 : 0);
+        proc.setTheme ((proc.getTheme() + 1) % 3);
         applyTheme();
     };
     applyTheme();
@@ -497,7 +514,8 @@ SquelchEditor::~SquelchEditor()
 
 void SquelchEditor::applyTheme()
 {
-    skin.theme = proc.getTheme() == 1 ? Theme::green() : Theme::red();
+    const int th = proc.getTheme();
+    skin.theme = th == 1 ? Theme::green() : (th == 2 ? Theme::y2k() : Theme::red());
     view.repaint();
 }
 
