@@ -1,4 +1,4 @@
-SQUELCH v0.6 — acid bass synth
+SQUELCH v0.7 — acid bass synth
 
 INSTALL (VST3)
 1. Close FL Studio.
@@ -75,3 +75,14 @@ YOUR OWN PRESETS
 - "Open presets folder" in the same menu shows where they live
   (C:\Users\<you>\AppData\Roaming\Squelch\Presets). Delete or share the files there.
 - Presets store the sound (synth, movement, drive, delay, reverb), not the sequencer pattern.
+
+NEW IN v0.7
+- New interface, matching Aymane's mockup. Click the smiley logo to cycle themes:
+  Y2K (default) -> Red -> Green.
+- Values like LENGTH, RATE, BPM, KEY, SCALE, TIME are boxes: click the arrows,
+  drag up/down, scroll, or click the value for a list.
+- SEQ page in ARP mode shows the arp controls in place of the step grid.
+- DELAY: PING-PONG (off = centred echoes) and SYNC (off = free time in ms).
+- REVERB: PRE-DELAY (gap before the reverb), LOW CUT (no muddy bass in the reverb),
+  DUCKING (reverb dips while notes play and blooms in the gaps).
+- OUT meter: the white line is the volume; drag it.

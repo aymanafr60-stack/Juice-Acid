@@ -21,6 +21,9 @@ struct DelayParams
     float feedback = 0.45f;  // 0..1  (mapped to 0..0.92)
     float tone = 0.5f;       // 0..1  high cut 1.2 kHz .. 14 kHz
     float mix = 0.3f;        // 0..1
+    bool  pingPong = true;   // echoes bounce left/right; off = centred echoes
+    bool  sync = true;       // time follows the tempo; off = free time in ms
+    float timeMs = 375.0f;   // used when sync is off
 };
 
 struct DelayTime { const char* name; double beats; };
@@ -58,7 +61,8 @@ public:
     {
         params = p;
         const double beats = delayTimes[std::clamp (p.time, 0, numDelayTimes - 1)].beats;
-        const double secs = beats * 60.0 / std::clamp (bpm, 30.0, 300.0);
+        const double secs = p.sync ? beats * 60.0 / std::clamp (bpm, 30.0, 300.0)
+                                   : std::clamp ((double) p.timeMs, 10.0, 2000.0) / 1000.0;
         targetDelay = (float) std::clamp (secs * fs, 16.0, (double) size - 8.0);
     }
 
@@ -86,16 +90,27 @@ public:
         const float lpHz = 1200.0f * std::pow (14000.0f / 1200.0f, std::clamp (params.tone, 0.0f, 1.0f));
         const float lpA = 1.0f - std::exp (-2.0f * 3.14159265f * std::min (lpHz, 0.45f * fs) / fs);
 
-        // feedback paths cross over: left echo feeds the right line, right feeds left
-        const float toR = filter (dl, lpL, hpL, hpInL, lpA) * fb;
-        const float toL = filter (dr, lpR, hpR, hpInR, lpA) * fb;
-
-        bufL[(size_t) write] = std::tanh (in * (params.on ? 1.0f : 0.0f) + toL);
-        bufR[(size_t) write] = std::tanh (toR);
+        const float input = in * (params.on ? 1.0f : 0.0f);
+        if (params.pingPong)
+        {
+            // feedback paths cross over: left echo feeds the right line, right feeds left
+            const float toR = filter (dl, lpL, hpL, hpInL, lpA) * fb;
+            const float toL = filter (dr, lpR, hpR, hpInR, lpA) * fb;
+            bufL[(size_t) write] = std::tanh (input + toL);
+            bufR[(size_t) write] = std::tanh (toR);
+            outL += dl * wetGain;
+            outR += dr * wetGain;
+        }
+        else
+        {
+            // centred echoes: one line feeding itself, heard in both speakers (plus any ping-pong tail fading out)
+            const float back = filter (dl, lpL, hpL, hpInL, lpA) * fb;
+            bufL[(size_t) write] = std::tanh (input + back);
+            bufR[(size_t) write] = 0.0f;
+            outL += (dl + dr) * wetGain;
+            outR += (dl + dr) * wetGain;
+        }
         if (++write >= size) write = 0;
-
-        outL += dl * wetGain;
-        outR += dr * wetGain;
     }
 
 private:

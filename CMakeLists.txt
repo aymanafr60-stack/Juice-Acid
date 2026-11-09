@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(Squelch VERSION 0.3.0)
+project(Squelch VERSION 0.7.0)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -27,8 +27,9 @@ juce_add_plugin(Squelch
     VST3_CATEGORIES             Instrument Synth)
 
 juce_add_binary_data(SquelchData SOURCES
-    Resources/Fredoka-Bold.ttf
-    Resources/Fredoka-Medium.ttf)
+    Resources/Manrope-500.ttf
+    Resources/Manrope-700.ttf
+    Resources/Manrope-800.ttf)
 
 target_sources(Squelch PRIVATE
     Source/PluginProcessor.cpp

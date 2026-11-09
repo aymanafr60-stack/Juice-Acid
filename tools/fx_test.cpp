@@ -29,6 +29,22 @@ int main()
         check (std::abs (peakR - 36000) < 60, "second echo on the RIGHT one dotted 8th later");
         check (maxR < maxL, "echoes decay");
     }
+    { // ping-pong off: echoes centred (same in both channels)
+        PingPongDelay d; d.prepare (sr);
+        DelayParams p; p.on = true; p.time = 3; p.feedback = 0.5f; p.mix = 1.0f; p.pingPong = false;
+        d.setParams (p, 120.0);
+        float diff = 0, mx = 0;
+        for (int i = 0; i < 48000; ++i) { float l = 0, r = 0; d.process (i == 0 ? 1.0f : 0.0f, l, r); diff += std::abs (l - r); mx = std::max (mx, std::abs (l)); }
+        check (diff < 1e-4f && mx > 0.3f, "ping-pong off: echoes identical left and right");
+    }
+    { // sync off: free time in ms
+        PingPongDelay d; d.prepare (sr);
+        DelayParams p; p.on = true; p.sync = false; p.timeMs = 250.0f; p.feedback = 0.0f; p.mix = 1.0f; p.tone = 1.0f;
+        d.setParams (p, 120.0);
+        int peak = -1; float mx = 0;
+        for (int i = 0; i < 24000; ++i) { float l = 0, r = 0; d.process (i == 0 ? 1.0f : 0.0f, l, r); if (std::abs (l) > mx) { mx = std::abs (l); peak = i; } }
+        check (std::abs (peak - 12000) < 30, "sync off: 250 ms echo lands at 250 ms");
+    }
     { // delay off: silent
         PingPongDelay d; d.prepare (sr);
         DelayParams p; p.on = false; d.setParams (p, 120.0);

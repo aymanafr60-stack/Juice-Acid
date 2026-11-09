@@ -96,12 +96,25 @@ APVTS::ParameterLayout SquelchProcessor::createLayout()
     addPct ("dly_fb", "Delay Feedback", 0.45f);
     addPct ("dly_tone", "Delay Tone", 0.5f);
     addPct ("dly_mix", "Delay Mix", 0.3f);
+    layout.add (std::make_unique<AudioParameterBool> (ParameterID { "dly_pingpong", 1 }, "Delay Ping-Pong", true));
+    layout.add (std::make_unique<AudioParameterBool> (ParameterID { "dly_sync", 1 }, "Delay Sync", true));
+    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { "dly_ms", 1 }, "Delay Time (free)",
+                    NormalisableRange<float> (10.0f, 2000.0f, 1.0f, 0.4f), 375.0f,
+                    AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int)
+                    { return v < 1000.0f ? String (roundToInt (v)) + " ms" : String (v / 1000.0f, 2) + " s"; })));
 
     // --- reverb
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { "rev_on", 1 }, "Reverb On", false));
     addPct ("rev_size", "Reverb Size", 0.5f);
     addPct ("rev_damp", "Reverb Damping", 0.5f);
     addPct ("rev_mix", "Reverb Mix", 0.25f);
+    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { "rev_predelay", 1 }, "Reverb Pre-Delay",
+                    NormalisableRange<float> (0.0f, 200.0f, 1.0f), 10.0f,
+                    AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int) { return String (roundToInt (v)) + " ms"; })));
+    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { "rev_lowcut", 1 }, "Reverb Low Cut",
+                    NormalisableRange<float> (20.0f, 1000.0f, 1.0f, 0.4f), 150.0f,
+                    AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int) { return String (roundToInt (v)) + " Hz"; })));
+    addPct ("rev_duck", "Reverb Ducking", 0.0f);
 
     // --- sequencer / arp (not part of presets)
     layout.add (std::make_unique<AudioParameterChoice> (ParameterID { "seq_mode", 1 }, "Seq Mode",
@@ -157,12 +170,14 @@ SquelchProcessor::SquelchProcessor()
     mFm = get ("filter_fm");     mSweep = get ("sweep");
     dOn = get ("dly_on"); dTime = get ("dly_time"); dFb = get ("dly_fb"); dTone = get ("dly_tone"); dMix = get ("dly_mix");
     rOn = get ("rev_on"); rSize = get ("rev_size"); rDamp = get ("rev_damp"); rMix = get ("rev_mix");
+    rPre = get ("rev_predelay"); rLowCut = get ("rev_lowcut"); rDuck = get ("rev_duck");
+    dPing = get ("dly_pingpong"); dSync = get ("dly_sync"); dMs = get ("dly_ms");
 
     sink.v = &voice;
     refreshUserPresets();
 
     apvts.state.setProperty (presetProp, 0, nullptr);
-    apvts.state.setProperty (themeProp, 0, nullptr);
+    apvts.state.setProperty (themeProp, 2, nullptr); // Y2K theme by default
     apvts.state.setProperty (pageProp, 0, nullptr);
 }
 
@@ -177,9 +192,7 @@ void SquelchProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     voice.prepare (sampleRate);
     seq.prepare (sampleRate);
     delay.prepare (sampleRate);
-    reverb.setSampleRate (sampleRate);
-    reverb.reset();
-    reverbTail = 0;
+    reverb.prepare (sampleRate, samplesPerBlock);
     oversampling.initProcessing ((size_t) samplesPerBlock);
     oversampling.reset();
     drive.prepare (sampleRate * (double) oversampling.getOversamplingFactor());
@@ -308,6 +321,9 @@ void SquelchProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
         dp.feedback = dFb->load();
         dp.tone = dTone->load();
         dp.mix = dMix->load();
+        dp.pingPong = dPing->load() > 0.5f;
+        dp.sync = dSync->load() > 0.5f;
+        dp.timeMs = dMs->load();
         const double delayBpm = hostBpmKnown ? hostBpm : (double) sBpm->load();
         delay.setParams (dp, delayBpm);
     }
@@ -323,23 +339,17 @@ void SquelchProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
         if (outR != nullptr) outR[i] = r; else outL[i] = 0.5f * (l + r);
     }
 
-    // --- reverb
+    // --- reverb (pre-delay, low cut, ducking)
     {
-        const bool revOn = rOn->load() > 0.5f;
-        if (revOn) reverbTail = (int) (getSampleRate() * 4.0);
-        if (revOn || reverbTail > 0)
-        {
-            juce::Reverb::Parameters rp;
-            rp.roomSize = 0.3f + 0.65f * rSize->load();
-            rp.damping  = rDamp->load();
-            rp.wetLevel = revOn ? rMix->load() * 0.15f : 0.0f;  // juce::Reverb scales wet by 3
-            rp.dryLevel = 0.5f;                                   // ...and dry by 2 -> unity
-            rp.width    = 1.0f;
-            reverb.setParameters (rp);
-            if (outR != nullptr) reverb.processStereo (outL, outR, numSamples);
-            else                 reverb.processMono (outL, numSamples);
-            if (! revOn) reverbTail -= numSamples;
-        }
+        squelch::ReverbParams rp;
+        rp.on = rOn->load() > 0.5f;
+        rp.size = rSize->load();
+        rp.damp = rDamp->load();
+        rp.mix = rMix->load();
+        rp.preDelayMs = rPre->load();
+        rp.lowCutHz = rLowCut->load();
+        rp.ducking = rDuck->load();
+        reverb.process (rp, outL, outR, numSamples);
     }
 
     // --- safety: soften anything that would clip

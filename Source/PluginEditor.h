@@ -4,7 +4,7 @@
 #include "Ui.h"
 #include "SeqUi.h"
 
-// Everything is laid out on a fixed 1000 x 535 canvas, then scaled to the window size.
+// Everything is laid out on a fixed 1000 x 600 canvas, then scaled to the window size.
 class SquelchView : public juce::Component
 {
 public:
@@ -14,69 +14,83 @@ public:
     void resized() override;
     void mouseUp (const juce::MouseEvent&) override;
 
-    void tick(); // called ~30x per second by the editor
+    void tick(); // ~30x per second
     std::function<void()> onThemeToggle;
 
-    static constexpr int canvasW = 1000, canvasH = 535;
+    static constexpr int canvasW = 1000, canvasH = 600;
 
 private:
-    void updateShapeKnob (int wave);
+    using Btn = squelch::ui::Btn;
+    using Knob = squelch::ui::Knob;
+    using Stepper = squelch::ui::Stepper;
+
+    juce::RangedAudioParameter& param (const char* id);
+    float value (const char* id) const;
     void setPage (int page);
+    void refreshVisibility();
+    void updateShapeKnob (int wave);
     void clearPattern();
     void generateLine (bool small);
-    juce::RangedAudioParameter& param (const char* id);
+    void paintFooter (juce::Graphics&);
 
     SquelchProcessor& proc;
     squelch::ui::Skin& skin;
 
-    // oscillator
-    squelch::ui::PillButton saw, square, pulse, super;
-    squelch::ui::Knob tune, pw, sub, slide;
-
-    // filter + envelope
-    squelch::ui::FilterDisplay display;
-    squelch::ui::Knob envMod, cutoff, res, decay, accent;
-
-    // drive fx
-    squelch::ui::PillButton od, dist, fuzz;
-    squelch::ui::LedToggle driveLed;
-    squelch::ui::Knob drive, tone, level, mix;
-
-    // header / footer
+    // header
+    Btn tabSynth, tabSeq, tabFx;
+    squelch::ui::SegmentBox tabBox;
     squelch::ui::PresetBar presetBar;
     squelch::ui::OutMeter meter;
-    squelch::ui::PillButton synthTab, seqTab, fxTab;
+
+    // synth page
+    Btn saw, square, pulse, super;
+    squelch::ui::SegmentBox waveBox;
+    Knob tune, pw, sub, slide;
+    squelch::ui::FilterDisplay display;
+    Knob envMod, cutoff, res, decay, accent;
+    squelch::ui::ToggleSwitch driveSwitch;
+    Btn od, dist, fuzz;
+    squelch::ui::SegmentBox driveBox;
+    Knob drive, tone, level, mix;
 
     // seq page
-    squelch::ui::PillButton seqOff, seqPattern, seqArp;
-    squelch::ui::ParamPill play;
-    squelch::ui::PillButton clear, generate, mutate;
+    Btn modeOff, modePattern, modeArp;
+    squelch::ui::SegmentBox seqModeBox;
+    squelch::ui::ParamToggleButton play;
+    Btn clear, mutate, generate;
     squelch::ui::DragMidiButton dragMidi;
     squelch::ui::StepGrid grid;
-    squelch::ui::Knob length, rate, swing, gate, bpm, key, scale;
-    squelch::ui::ParamPill latch, chord;
-    squelch::ui::Knob arpMode, arpOct, arpAcc, arpSlide;
-    squelch::ui::PillButton print;
+    Stepper lengthStep, rateStep, bpmStep, keyStep, scaleStep;
+    Knob swing, gate;
+    Btn arpUp, arpDown, arpUpDown, arpRandom, arpPlayed;
+    squelch::ui::SegmentBox arpModeBox;
+    squelch::ui::ParamToggleButton latch, chord;
+    Btn print;
+    Stepper arpOctStep, arpAccStep;
+    Knob arpSlide;
 
     // fx page
-    squelch::ui::Knob softAtk, accDecay, tracking, filterFm, sweep;
-    squelch::ui::LedToggle delayLed, reverbLed;
-    squelch::ui::Knob dlyTime, dlyFb, dlyTone, dlyMix;
-    squelch::ui::Knob revSize, revDamp, revMix;
+    Knob softAtk, accDecay, tracking, filterFm;
+    Btn sweepSlow, sweepNormal, sweepFast;
+    squelch::ui::SegmentBox sweepBox;
+    squelch::ui::ToggleSwitch delaySwitch, reverbSwitch;
+    Stepper dlyTimeStep, dlyMsStep;
+    squelch::ui::ParamToggleButton pingPong, sync;
+    Knob dlyFb, dlyTone, dlyMix;
+    Knob revSize, revDamp, revMix, revPre, revLowCut, revDuck;
 
-    // these bind buttons to parameters, so they come after the buttons
-    squelch::ui::ChoiceGroup waveGroup, modeGroup, seqModeGroup;
+    // parameter bindings for button groups (after the buttons)
+    squelch::ui::ChoiceGroup waveGroup, driveModeGroup, seqModeGroup, arpModeGroup, sweepGroup;
 
-    std::vector<juce::Component*> synthPage, seqPage, fxPage;
+    std::vector<juce::Component*> synthPage, seqPage, fxPage, arpOnly, patternOnly;
     int page = 0;
-    int seqModeShown = -1;
-    int lastPrintOk = 0, lastPrintFail = 0;
-    juce::String status;
-    juce::uint32 statusUntil = 0;
-
+    int shownMode = -1, shownSync = -1;
     int currentWave = 0;
     int lastPresetShown = -1;
     float meterLevel = 0.0f;
+    int lastPrintOk = 0, lastPrintFail = 0;
+    juce::String toast;
+    juce::uint32 toastUntil = 0;
 };
 
 class SquelchEditor : public juce::AudioProcessorEditor, private juce::Timer

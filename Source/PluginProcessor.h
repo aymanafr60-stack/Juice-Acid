@@ -6,6 +6,7 @@
 #include "Drive.h"
 #include "Sequencer.h"
 #include "Delay.h"
+#include "ReverbFx.h"
 #include "Presets.h"
 
 class SquelchProcessor : public juce::AudioProcessor
@@ -82,8 +83,7 @@ private:
     juce::dsp::Oversampling<float> oversampling { 1, 2, juce::dsp::Oversampling<float>::filterHalfBandPolyphaseIIR, true };
     juce::AudioBuffer<float> monoBuffer;
     squelch::PingPongDelay delay;
-    juce::Reverb reverb;
-    int reverbTail = 0;  // samples left to process after the reverb is switched off
+    squelch::ReverbFx reverb;
 
     std::atomic<float>* pWave = nullptr;   std::atomic<float>* pPw = nullptr;
     std::atomic<float>* pTune = nullptr;   std::atomic<float>* pCutoff = nullptr;
@@ -112,6 +112,10 @@ private:
     std::atomic<float>* dMix = nullptr;
     std::atomic<float>* rOn = nullptr;   std::atomic<float>* rSize = nullptr;
     std::atomic<float>* rDamp = nullptr; std::atomic<float>* rMix = nullptr;
+    std::atomic<float>* rPre = nullptr;  std::atomic<float>* rLowCut = nullptr;
+    std::atomic<float>* rDuck = nullptr;
+    std::atomic<float>* dPing = nullptr; std::atomic<float>* dSync = nullptr;
+    std::atomic<float>* dMs = nullptr;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SquelchProcessor)
 };
