@@ -518,6 +518,35 @@ public:
         g.setColour (t.displayFill.withAlpha (0.85f));
         g.fillPath (area);
 
+        // neon smiley in the background: glow layers, then a bright core line
+        {
+            const float r = box.getHeight() * 0.33f;
+            const auto c = box.getCentre();
+            juce::Path face;
+            face.addEllipse (c.x - r, c.y - r, r * 2, r * 2);
+            face.addCentredArc (c.x, c.y + r * 0.02f, r * 0.55f, r * 0.5f, 0.0f,
+                                juce::MathConstants<float>::pi * 0.62f, juce::MathConstants<float>::pi * 1.38f, true);
+            const float ew = r * 0.17f, eh = r * 0.34f;
+            juce::Path eyes;
+            eyes.addEllipse (c.x - r * 0.36f - ew / 2, c.y - r * 0.38f, ew, eh);
+            eyes.addEllipse (c.x + r * 0.36f - ew / 2, c.y - r * 0.38f, ew, eh);
+
+            const auto neon = t.active;
+            static constexpr float glowW[] = { 22.0f, 14.0f, 8.0f };
+            static constexpr float glowA[] = { 0.07f, 0.14f, 0.28f };
+            for (int i = 0; i < 3; ++i)
+            {
+                g.setColour (neon.withAlpha (glowA[i]));
+                g.strokePath (face, juce::PathStrokeType (glowW[i], juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+                g.strokePath (eyes, juce::PathStrokeType (glowW[i], juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+            }
+            g.setColour (neon);
+            g.strokePath (face, juce::PathStrokeType (3.5f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+            g.fillPath (eyes);
+            g.setColour (neon.interpolatedWith (juce::Colours::white, 0.55f));
+            g.strokePath (face, juce::PathStrokeType (1.3f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        }
+
         const float xc = xForF (fc);
         juce::Path dash; dash.startNewSubPath (xc, box.getY()); dash.lineTo (xc, box.getBottom());
         juce::Path dashed;
@@ -526,6 +555,8 @@ public:
         g.setColour (t.label.withAlpha (0.55f));
         g.fillPath (dashed);
 
+        g.setColour (displayBackground (t));
+        g.strokePath (curve, juce::PathStrokeType (8.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
         g.setColour (t.active);
         g.strokePath (curve, juce::PathStrokeType (2.5f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 
