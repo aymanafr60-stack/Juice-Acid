@@ -13,6 +13,9 @@ namespace layout
     const juce::Rectangle<float> drivePanel  { 750.0f, 103.0f, 222.0f, 368.0f };
     const juce::Rectangle<float> stepsPanel  { 30.0f, 103.0f, 701.0f, 368.0f };
     const juce::Rectangle<float> arpPanel    { 750.0f, 103.0f, 222.0f, 368.0f };
+    const juce::Rectangle<float> movePanel   { 30.0f, 103.0f, 342.0f, 368.0f };
+    const juce::Rectangle<float> delayPanel  { 391.0f, 103.0f, 340.0f, 368.0f };
+    const juce::Rectangle<float> reverbPanel { 750.0f, 103.0f, 222.0f, 368.0f };
     const juce::Point<float> logoCentre      { 52.0f, 40.0f };
     constexpr float logoRadius = 23.0f;
 }
@@ -33,7 +36,7 @@ SquelchView::SquelchView (SquelchProcessor& p, Skin& s)
       level (s, param ("level"), "LEVEL"), mix (s, param ("mix"), "MIX"),
       presetBar (s),
       meter (s, param ("volume")),
-      synthTab (s, "SYNTH"), seqTab (s, "SEQ"),
+      synthTab (s, "SYNTH"), seqTab (s, "SEQ"), fxTab (s, "FX"),
       seqOff (s, "OFF"), seqPattern (s, "PATTERN"), seqArp (s, "ARP"),
       play (s, "PLAY", param ("seq_play")), clear (s, "CLEAR"),
       generate (s, "GENERATE"), mutate (s, "MUTATE"),
@@ -45,6 +48,14 @@ SquelchView::SquelchView (SquelchProcessor& p, Skin& s)
       arpMode (s, param ("arp_mode"), "MODE"), arpOct (s, param ("arp_oct"), "OCTAVE"),
       arpAcc (s, param ("arp_acc"), "ACCENT"), arpSlide (s, param ("arp_slide"), "SLIDE"),
       print (s, "PRINT TO STEPS"),
+      softAtk (s, param ("soft_atk"), "SOFT ATK"), accDecay (s, param ("acc_decay"), "ACC DECAY"),
+      tracking (s, param ("tracking"), "TRACKING"), filterFm (s, param ("filter_fm"), "FILTER FM"),
+      sweep (s, param ("sweep"), "SWEEP"),
+      delayLed (s, param ("dly_on")), reverbLed (s, param ("rev_on")),
+      dlyTime (s, param ("dly_time"), "TIME"), dlyFb (s, param ("dly_fb"), "FEEDBACK"),
+      dlyTone (s, param ("dly_tone"), "TONE"), dlyMix (s, param ("dly_mix"), "MIX"),
+      revSize (s, param ("rev_size"), "SIZE"), revDamp (s, param ("rev_damp"), "DAMP"),
+      revMix (s, param ("rev_mix"), "MIX"),
       waveGroup (param ("wave"), { &saw, &square, &pulse, &super }),
       modeGroup (param ("drive_mode"), { &od, &dist, &fuzz }),
       seqModeGroup (param ("seq_mode"), { &seqOff, &seqPattern, &seqArp })
@@ -55,9 +66,13 @@ SquelchView::SquelchView (SquelchProcessor& p, Skin& s)
     seqPage   = { &seqOff, &seqPattern, &seqArp, &play, &clear, &generate, &mutate, &dragMidi, &grid,
                   &length, &rate, &swing, &gate, &bpm, &key, &scale,
                   &latch, &chord, &arpMode, &arpOct, &arpAcc, &arpSlide, &print };
+    fxPage    = { &softAtk, &accDecay, &tracking, &filterFm, &sweep,
+                  &delayLed, &dlyTime, &dlyFb, &dlyTone, &dlyMix,
+                  &reverbLed, &revSize, &revDamp, &revMix };
     for (auto* c : synthPage) addChildComponent (c);
     for (auto* c : seqPage)   addChildComponent (c);
-    for (auto* c : std::initializer_list<juce::Component*> { &presetBar, &meter, &synthTab, &seqTab })
+    for (auto* c : fxPage)    addChildComponent (c);
+    for (auto* c : std::initializer_list<juce::Component*> { &presetBar, &meter, &synthTab, &seqTab, &fxTab })
         addAndMakeVisible (c);
 
     for (auto* k : { &length, &rate, &swing, &gate, &bpm, &key, &scale }) k->knobSize = 40;
@@ -65,6 +80,23 @@ SquelchView::SquelchView (SquelchProcessor& p, Skin& s)
 
     synthTab.onClick = [this] { setPage (0); };
     seqTab.onClick   = [this] { setPage (1); };
+    fxTab.onClick    = [this] { setPage (2); };
+    fxTab.setTooltip ("TD-3-MO style extras, delay and reverb");
+
+    for (auto* k : { &softAtk, &accDecay, &tracking, &filterFm, &sweep }) k->knobSize = 56;
+    for (auto* k : { &dlyTime, &dlyFb, &dlyTone, &dlyMix }) k->knobSize = 62;
+    for (auto* k : { &revSize, &revDamp, &revMix }) k->knobSize = 46;
+    softAtk.setTooltip ("Attack of normal (non-accented) notes: short = clicky, long = soft swell");
+    accDecay.setTooltip ("How long the filter stays open on ACCENTED notes");
+    tracking.setTooltip ("Cutoff follows the note: higher notes get brighter");
+    filterFm.setTooltip ("The oscillator wobbles the filter: adds growl and grit");
+    sweep.setTooltip ("How fast repeated accents wind the filter open");
+    dlyTime.setTooltip ("Delay time, synced to tempo. 3/16 is the classic acid echo");
+    dlyFb.setTooltip ("How many echoes");
+    dlyTone.setTooltip ("Dark to bright echoes");
+    dlyMix.setTooltip ("Echo level (the dry sound stays at full volume)");
+    delayLed.setHelpText ("Delay on/off");
+    reverbLed.setHelpText ("Reverb on/off");
     synthTab.setTooltip ("Synth controls");
     seqTab.setTooltip ("Step sequencer and arpeggiator");
 
@@ -105,8 +137,16 @@ SquelchView::SquelchView (SquelchProcessor& p, Skin& s)
     display.getResonance = [this] { return proc.apvts.getRawParameterValue ("res")->load(); };
 
     presetBar.getIndex = [this] { return proc.getPresetIndex(); };
-    presetBar.getCount = [] { return squelch::numFactoryPresets; };
-    presetBar.getName  = [] (int i) { return juce::String (squelch::factoryPresets[juce::jlimit (0, squelch::numFactoryPresets - 1, i)].name); };
+    presetBar.getCount = [this] { return proc.getNumPresetsTotal(); };
+    presetBar.getFactoryCount = [] { return squelch::numFactoryPresets; };
+    presetBar.getName  = [this] (int i) { return proc.getPresetDisplayName (i); };
+    presetBar.save     = [this] (const juce::String& name) { const bool ok = proc.saveUserPreset (name); presetBar.repaint(); return ok; };
+    presetBar.openFolder = [this]
+    {
+        auto folder = proc.getUserPresetFolder();
+        folder.createDirectory();
+        folder.startAsProcess();
+    };
     presetBar.load     = [this] (int i) { proc.loadPreset (i); presetBar.repaint(); };
 
     saw.setTooltip ("Saw: the classic acid buzz");
@@ -124,12 +164,14 @@ SquelchView::SquelchView (SquelchProcessor& p, Skin& s)
 
 void SquelchView::setPage (int newPage)
 {
-    page = newPage == 1 ? 1 : 0;
+    page = juce::jlimit (0, 2, newPage);
     proc.setPage (page);
     for (auto* c : synthPage) c->setVisible (page == 0);
     for (auto* c : seqPage)   c->setVisible (page == 1);
+    for (auto* c : fxPage)    c->setVisible (page == 2);
     synthTab.setToggleState (page == 0, juce::dontSendNotification);
     seqTab.setToggleState (page == 1, juce::dontSendNotification);
+    fxTab.setToggleState (page == 2, juce::dontSendNotification);
     repaint();
 }
 
@@ -283,10 +325,27 @@ void SquelchView::resized()
     arpSlide.setBounds (863, 304, 90, 98);
     print.setBounds    (766, 410, 194, 44);
 
+    // fx page
+    softAtk.setBounds  (46, 158, 104, 106);
+    accDecay.setBounds (150, 158, 104, 106);
+    tracking.setBounds (254, 158, 104, 106);
+    filterFm.setBounds (98, 284, 104, 106);
+    sweep.setBounds    (202, 284, 104, 106);
+    delayLed.setBounds (691, 117, 24, 24);
+    dlyTime.setBounds  (420, 160, 130, 118);
+    dlyFb.setBounds    (572, 160, 130, 118);
+    dlyTone.setBounds  (420, 300, 130, 118);
+    dlyMix.setBounds   (572, 300, 130, 118);
+    reverbLed.setBounds (933, 117, 24, 24);
+    revSize.setBounds  (765, 200, 90, 100);
+    revDamp.setBounds  (863, 200, 90, 100);
+    revMix.setBounds   (814, 320, 90, 100);
+
     // header / footer
-    synthTab.setBounds (452, 20, 82, 42);
-    seqTab.setBounds   (538, 20, 64, 42);
-    presetBar.setBounds (612, 18, 362, 48);
+    synthTab.setBounds (444, 20, 72, 42);
+    seqTab.setBounds   (520, 20, 56, 42);
+    fxTab.setBounds    (580, 20, 52, 42);
+    presetBar.setBounds (640, 18, 334, 48);
     meter.setBounds (688, 486, 286, 38);
 }
 
@@ -332,7 +391,7 @@ void SquelchView::paint (juce::Graphics& g)
         drawStickerBox (g, pill, 15.0f, t.presetButton, t.shadow, 2.0f, t.shadow, 3.0f);
         g.setColour (t.presetIcon);
         g.setFont (skin.font (13.5f));
-        g.drawText (juce::String::fromUTF8 ("acid bass synth \xc2\xb7 v0.5"), pill, juce::Justification::centred, false);
+        g.drawText (juce::String::fromUTF8 ("acid bass synth \xc2\xb7 v0.6"), pill, juce::Justification::centred, false);
     }
 
     // --- panels
@@ -346,7 +405,21 @@ void SquelchView::paint (juce::Graphics& g)
         g.setColour (t.onRing);
         g.drawText (title, pill, juce::Justification::centred, false);
     };
-    if (page == 0)
+    if (page == 2)
+    {
+        panel (layout::movePanel, "MOVEMENT");
+        panel (layout::delayPanel, "DELAY");
+        panel (layout::reverbPanel, "REVERB");
+
+        g.setColour (t.valueText);
+        g.setFont (skin.font (13.0f, false));
+        g.drawFittedText ("TD-3-MO style extras: how notes start, how long accents\nstay open, and how the filter follows the notes.",
+                          juce::Rectangle<int> (46, 404, 310, 50), juce::Justification::centred, 2);
+        g.setFont (skin.font (13.5f, false));
+        g.drawText (juce::String::fromUTF8 ("ping-pong \xc2\xb7 synced"), juce::Rectangle<float> (520.0f, 118.0f, 160.0f, 27.0f),
+                    juce::Justification::centredRight, false);
+    }
+    else if (page == 0)
     {
         panel (layout::oscPanel, "OSCILLATOR");
         panel (layout::filterPanel, "FILTER + ENVELOPE");

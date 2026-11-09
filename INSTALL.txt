@@ -1,4 +1,4 @@
-SQUELCH v0.3 — acid bass synth
+SQUELCH v0.6 — acid bass synth
 
 INSTALL (VST3)
 1. Close FL Studio.
@@ -56,3 +56,22 @@ GENERATE / MUTATE (v0.5)
   accents and slides placed musically) instead of random notes. Click again for another.
 - MUTATE changes 2-3 steps of the current line and keeps the rest (step 1 stays put).
 - Both switch the sequencer to PATTERN so you hear the result.
+
+FX PAGE (v0.6)
+Click FX at the top.
+- MOVEMENT (TD-3-MO style extras):
+  SOFT ATK  attack of normal notes (accented notes always hit hard)
+  ACC DECAY how long the filter stays open on accented notes
+  TRACKING  cutoff follows the note, so high notes get brighter
+  FILTER FM the oscillator wobbles the filter: growl and grit
+  SWEEP     how fast a run of accents winds the filter open (Slow / Normal / Fast)
+- DELAY: ping-pong echo synced to FL's tempo (or the BPM knob). Red light = on/off.
+  TIME (3/16 = classic acid echo), FEEDBACK, TONE (dark..bright), MIX.
+- REVERB: SIZE, DAMP, MIX. Red light = on/off.
+
+YOUR OWN PRESETS
+- Click the preset name -> "Save current sound...", type a name, press Enter.
+- Your presets appear as U1, U2... after the factory ones, in the menu and with the arrows.
+- "Open presets folder" in the same menu shows where they live
+  (C:\Users\<you>\AppData\Roaming\Squelch\Presets). Delete or share the files there.
+- Presets store the sound (synth, movement, drive, delay, reverb), not the sequencer pattern.

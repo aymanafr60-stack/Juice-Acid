@@ -45,7 +45,7 @@ private:
     // header / footer
     squelch::ui::PresetBar presetBar;
     squelch::ui::OutMeter meter;
-    squelch::ui::PillButton synthTab, seqTab;
+    squelch::ui::PillButton synthTab, seqTab, fxTab;
 
     // seq page
     squelch::ui::PillButton seqOff, seqPattern, seqArp;
@@ -58,10 +58,16 @@ private:
     squelch::ui::Knob arpMode, arpOct, arpAcc, arpSlide;
     squelch::ui::PillButton print;
 
+    // fx page
+    squelch::ui::Knob softAtk, accDecay, tracking, filterFm, sweep;
+    squelch::ui::LedToggle delayLed, reverbLed;
+    squelch::ui::Knob dlyTime, dlyFb, dlyTone, dlyMix;
+    squelch::ui::Knob revSize, revDamp, revMix;
+
     // these bind buttons to parameters, so they come after the buttons
     squelch::ui::ChoiceGroup waveGroup, modeGroup, seqModeGroup;
 
-    std::vector<juce::Component*> synthPage, seqPage;
+    std::vector<juce::Component*> synthPage, seqPage, fxPage;
     int page = 0;
     int seqModeShown = -1;
     int lastPrintOk = 0, lastPrintFail = 0;

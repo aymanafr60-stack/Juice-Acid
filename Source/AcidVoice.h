@@ -37,6 +37,13 @@ struct VoiceParams
     float slideTimeMs  = 60.0f; // 10 .. 500
     float subLevel     = 0.0f;  // 0 .. 1
     int   accentThreshold = 100; // MIDI velocity at/above which a note is accented
+
+    // TD-3-MO style extras (defaults reproduce the plain behaviour)
+    float softAttack   = 0.5f;    // 0..1 -> 0.3 .. 30 ms attack on NON-accented notes (0.5 = 3 ms)
+    float accentDecay  = 0.4628f; // 0..1 -> 50 ms .. 1 s filter decay on accented notes (default 0.2 s)
+    float tracking     = 0.0f;    // 0..1 cutoff follows the note pitch (1 = fully)
+    float filterFm     = 0.0f;    // 0..1 the oscillator modulates the cutoff (growl)
+    int   sweepSpeed   = 1;       // 0 slow, 1 normal, 2 fast accent build-up
 };
 
 class AcidVoice
@@ -195,21 +202,24 @@ public:
         // --- envelopes
         // Filter env: exponential decay. Accented notes use a fixed short decay.
         const float normalDecaySec = 0.2f * std::pow (12.5f, params.decay); // 0.2 s .. 2.5 s
-        const float decaySec = accented ? 0.2f : normalDecaySec;
+        const float accentDecaySec = 0.05f * std::pow (20.0f, params.accentDecay); // 50 ms .. 1 s
+        const float decaySec = accented ? accentDecaySec : normalDecaySec;
         filterEnv *= std::exp (-4.6f / (decaySec * fs)); // ~-40 dB over decaySec
 
         // Accent env always short; feeds the accent-sweep "capacitor".
-        accentEnv *= std::exp (-4.6f / (0.2f * fs));
+        accentEnv *= std::exp (-4.6f / (accentDecaySec * fs));
         const float accentTarget = accented ? accentEnv * params.accent : 0.0f;
         // Higher resonance = slower charge = stronger build-up on consecutive accents.
-        const float sweepTime = 0.008f + 0.07f * smoothRes;
+        static constexpr float sweepScale[3] = { 2.5f, 1.0f, 0.4f };
+        const float sweepTime = (0.008f + 0.07f * smoothRes) * sweepScale[std::clamp (params.sweepSpeed, 0, 2)];
         accentSweep += (accentTarget - accentSweep) * (1.0f - std::exp (-1.0f / (sweepTime * fs)));
 
-        // Amp env: fast attack, long natural decay while held, quick release.
+        // Amp env: attack (soft attack on normal notes), long natural decay while held, quick release.
+        const float attackSec = accented ? 0.003f : 0.0003f * std::pow (100.0f, params.softAttack);
         switch (ampStage)
         {
             case AmpStage::attack:
-                ampEnv += 1.0f / (0.003f * fs);
+                ampEnv += 1.0f / (attackSec * fs);
                 if (ampEnv >= 1.0f) { ampEnv = 1.0f; ampStage = AmpStage::hold; }
                 break;
             case AmpStage::hold:
@@ -228,7 +238,9 @@ public:
         const float envOct   = (accented ? 0.0f : smoothEnvMod * 4.5f * filterEnv)
                              + accentSweep * 4.0f
                              + (accented ? smoothEnvMod * 2.5f * filterEnv : 0.0f);
-        float fc = baseHz * std::exp2 (envOct);
+        const float trackOct = params.tracking * (pitch - 48.0f) / 12.0f;  // C3 = no change
+        const float fmOct    = params.filterFm * 2.5f * osc;               // audio-rate cutoff wobble
+        float fc = baseHz * std::exp2 (envOct + trackOct + fmOct);
         fc = std::clamp (fc, 20.0f, 0.42f * fs);
         lastCutoffHz = fc;
 

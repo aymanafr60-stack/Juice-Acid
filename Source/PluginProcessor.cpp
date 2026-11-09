@@ -8,6 +8,7 @@ static const juce::Identifier presetProp { "preset" };
 static const juce::Identifier themeProp  { "theme" };
 static const juce::Identifier pageProp   { "page" };
 static const juce::Identifier patternProp { "pattern" };
+static const juce::Identifier presetNameProp { "presetName" };
 
 APVTS::ParameterLayout SquelchProcessor::createLayout()
 {
@@ -73,6 +74,35 @@ APVTS::ParameterLayout SquelchProcessor::createLayout()
     // --- output
     addPct ("volume", "Volume", 0.7f);
 
+    // --- TD-3-MO style extras
+    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { "soft_atk", 1 }, "Soft Attack", unit(), 0.5f,
+                    AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int)
+                    { const float ms = 0.3f * std::pow (100.0f, v); return ms < 10.0f ? String (ms, 1) + " ms" : String (roundToInt (ms)) + " ms"; })));
+    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { "acc_decay", 1 }, "Accent Decay", unit(), 0.4628f,
+                    AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int)
+                    { const float ms = 50.0f * std::pow (20.0f, v); return ms < 1000.0f ? String (roundToInt (ms)) + " ms" : String (ms / 1000.0f, 2) + " s"; })));
+    addPct ("tracking", "Filter Tracking", 0.0f);
+    addPct ("filter_fm", "Filter FM", 0.0f);
+    layout.add (std::make_unique<AudioParameterChoice> (ParameterID { "sweep", 1 }, "Accent Sweep",
+                                                        StringArray { "Slow", "Normal", "Fast" }, 1));
+
+    // --- delay
+    layout.add (std::make_unique<AudioParameterBool> (ParameterID { "dly_on", 1 }, "Delay On", false));
+    {
+        StringArray names;
+        for (const auto& t : squelch::delayTimes) names.add (t.name);
+        layout.add (std::make_unique<AudioParameterChoice> (ParameterID { "dly_time", 1 }, "Delay Time", names, 3));
+    }
+    addPct ("dly_fb", "Delay Feedback", 0.45f);
+    addPct ("dly_tone", "Delay Tone", 0.5f);
+    addPct ("dly_mix", "Delay Mix", 0.3f);
+
+    // --- reverb
+    layout.add (std::make_unique<AudioParameterBool> (ParameterID { "rev_on", 1 }, "Reverb On", false));
+    addPct ("rev_size", "Reverb Size", 0.5f);
+    addPct ("rev_damp", "Reverb Damping", 0.5f);
+    addPct ("rev_mix", "Reverb Mix", 0.25f);
+
     // --- sequencer / arp (not part of presets)
     layout.add (std::make_unique<AudioParameterChoice> (ParameterID { "seq_mode", 1 }, "Seq Mode",
                                                         StringArray { "Off", "Pattern", "Arp" }, 0));
@@ -123,7 +153,13 @@ SquelchProcessor::SquelchProcessor()
     sScale = get ("scale");  aMode = get ("arp_mode"); aOct = get ("arp_oct");    aAcc = get ("arp_acc");
     aSlide = get ("arp_slide"); aLatch = get ("arp_latch"); aChord = get ("arp_chord");
 
+    mSoftAtk = get ("soft_atk"); mAccDecay = get ("acc_decay"); mTrack = get ("tracking");
+    mFm = get ("filter_fm");     mSweep = get ("sweep");
+    dOn = get ("dly_on"); dTime = get ("dly_time"); dFb = get ("dly_fb"); dTone = get ("dly_tone"); dMix = get ("dly_mix");
+    rOn = get ("rev_on"); rSize = get ("rev_size"); rDamp = get ("rev_damp"); rMix = get ("rev_mix");
+
     sink.v = &voice;
+    refreshUserPresets();
 
     apvts.state.setProperty (presetProp, 0, nullptr);
     apvts.state.setProperty (themeProp, 0, nullptr);
@@ -140,6 +176,10 @@ void SquelchProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     voice.prepare (sampleRate);
     seq.prepare (sampleRate);
+    delay.prepare (sampleRate);
+    reverb.setSampleRate (sampleRate);
+    reverb.reset();
+    reverbTail = 0;
     oversampling.initProcessing ((size_t) samplesPerBlock);
     oversampling.reset();
     drive.prepare (sampleRate * (double) oversampling.getOversamplingFactor());
@@ -160,6 +200,11 @@ void SquelchProcessor::updateParams()
     p.accent      = pAccent->load();
     p.slideTimeMs = pSlide->load();
     p.subLevel    = pSub->load();
+    p.softAttack  = mSoftAtk->load();
+    p.accentDecay = mAccDecay->load();
+    p.tracking    = mTrack->load();
+    p.filterFm    = mFm->load();
+    p.sweepSpeed  = (int) mSweep->load();
     voice.setParams (p);
 
     squelch::DriveParams d;
@@ -208,12 +253,12 @@ void SquelchProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
     auto* mono = monoBuffer.getWritePointer (0);
 
     // where is the host? (FL's transport, if it's playing)
-    bool hostPlaying = false;
+    bool hostPlaying = false, hostBpmKnown = false;
     double hostPpq = 0.0, hostBpm = 120.0;
     if (auto* ph = getPlayHead())
         if (auto pos = ph->getPosition())
         {
-            if (auto b = pos->getBpm()) hostBpm = *b;
+            if (auto b = pos->getBpm()) { hostBpm = *b; hostBpmKnown = true; }
             if (auto q = pos->getPpqPosition()) { hostPpq = *q; hostPlaying = pos->getIsPlaying(); }
         }
 
@@ -255,12 +300,63 @@ void SquelchProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
         u[i] = drive.process (u[i]);
     oversampling.processSamplesDown (block);
 
-    // mono synth -> every output channel
-    for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
-        buffer.copyFrom (ch, 0, monoBuffer, 0, 0, numSamples);
+    // --- delay (mono in, stereo out)
+    {
+        squelch::DelayParams dp;
+        dp.on = dOn->load() > 0.5f;
+        dp.time = (int) dTime->load();
+        dp.feedback = dFb->load();
+        dp.tone = dTone->load();
+        dp.mix = dMix->load();
+        const double delayBpm = hostBpmKnown ? hostBpm : (double) sBpm->load();
+        delay.setParams (dp, delayBpm);
+    }
+
+    const int numCh = buffer.getNumChannels();
+    auto* outL = buffer.getWritePointer (0);
+    auto* outR = numCh > 1 ? buffer.getWritePointer (1) : nullptr;
+    for (int i = 0; i < numSamples; ++i)
+    {
+        float l = mono[i], r = mono[i];
+        delay.process (mono[i], l, r);
+        outL[i] = l;
+        if (outR != nullptr) outR[i] = r; else outL[i] = 0.5f * (l + r);
+    }
+
+    // --- reverb
+    {
+        const bool revOn = rOn->load() > 0.5f;
+        if (revOn) reverbTail = (int) (getSampleRate() * 4.0);
+        if (revOn || reverbTail > 0)
+        {
+            juce::Reverb::Parameters rp;
+            rp.roomSize = 0.3f + 0.65f * rSize->load();
+            rp.damping  = rDamp->load();
+            rp.wetLevel = revOn ? rMix->load() * 0.15f : 0.0f;  // juce::Reverb scales wet by 3
+            rp.dryLevel = 0.5f;                                   // ...and dry by 2 -> unity
+            rp.width    = 1.0f;
+            reverb.setParameters (rp);
+            if (outR != nullptr) reverb.processStereo (outL, outR, numSamples);
+            else                 reverb.processMono (outL, numSamples);
+            if (! revOn) reverbTail -= numSamples;
+        }
+    }
+
+    // --- safety: soften anything that would clip
+    for (int ch = 0; ch < std::min (numCh, 2); ++ch)
+    {
+        auto* d = buffer.getWritePointer (ch);
+        for (int i = 0; i < numSamples; ++i)
+        {
+            const float a = std::abs (d[i]);
+            if (a > 0.95f) d[i] = std::copysign (0.95f + 0.05f * std::tanh ((a - 0.95f) / 0.05f), d[i]);
+        }
+    }
+    for (int ch = 2; ch < numCh; ++ch)
+        buffer.copyFrom (ch, 0, buffer, 0, 0, numSamples);
 
     // for the editor: meter + filter display
-    const float peak = monoBuffer.getMagnitude (0, 0, numSamples);
+    const float peak = buffer.getMagnitude (0, numSamples);
     if (peak > outputPeak.load()) outputPeak.store (peak);
     displayCutoffHz.store (voice.isActive() ? voice.getLastCutoffHz()
                                             : 50.0f * std::pow (100.0f, pCutoff->load()));
@@ -275,10 +371,102 @@ const juce::String SquelchProcessor::getProgramName (int index)
          ? juce::String (squelch::factoryPresets[index].name) : juce::String();
 }
 
+bool SquelchProcessor::isSoundParam (const juce::String& id) const
+{
+    static const juce::StringArray notSound { "seq_mode", "seq_play", "seq_len", "seq_rate", "seq_swing", "seq_gate",
+                                              "seq_bpm", "key", "scale", "arp_mode", "arp_oct", "arp_acc",
+                                              "arp_slide", "arp_latch", "arp_chord" };
+    return ! notSound.contains (id);
+}
+
+void SquelchProcessor::resetSoundToDefaults()
+{
+    for (auto* p : getParameters())
+        if (auto* rp = dynamic_cast<juce::RangedAudioParameter*> (p))
+            if (isSoundParam (rp->getParameterID()))
+            {
+                rp->beginChangeGesture();
+                rp->setValueNotifyingHost (rp->getDefaultValue());
+                rp->endChangeGesture();
+            }
+}
+
+juce::File SquelchProcessor::getUserPresetFolder() const
+{
+    return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
+               .getChildFile ("Squelch").getChildFile ("Presets");
+}
+
+void SquelchProcessor::refreshUserPresets()
+{
+    userPresetFiles = getUserPresetFolder().findChildFiles (juce::File::findFiles, false, "*.sqpreset");
+    userPresetFiles.sort();
+
+    // keep pointing at the same preset if the list changed
+    const auto name = apvts.state.getProperty (presetNameProp).toString();
+    if (name.isNotEmpty())
+        for (int i = 0; i < getNumPresetsTotal(); ++i)
+            if (getPresetDisplayName (i) == name) { apvts.state.setProperty (presetProp, i, nullptr); break; }
+}
+
+int SquelchProcessor::getNumPresetsTotal() const { return squelch::numFactoryPresets + userPresetFiles.size(); }
+
+juce::String SquelchProcessor::getPresetDisplayName (int index) const
+{
+    if (juce::isPositiveAndBelow (index, squelch::numFactoryPresets)) return squelch::factoryPresets[index].name;
+    const int u = index - squelch::numFactoryPresets;
+    if (juce::isPositiveAndBelow (u, userPresetFiles.size())) return userPresetFiles[u].getFileNameWithoutExtension().toUpperCase();
+    return {};
+}
+
+bool SquelchProcessor::saveUserPreset (const juce::String& rawName)
+{
+    const auto name = juce::File::createLegalFileName (rawName.trim()).substring (0, 40);
+    if (name.isEmpty()) return false;
+
+    juce::XmlElement xml ("SquelchPreset");
+    xml.setAttribute ("name", name);
+    xml.setAttribute ("version", 1);
+    for (auto* p : getParameters())
+        if (auto* rp = dynamic_cast<juce::RangedAudioParameter*> (p))
+            if (isSoundParam (rp->getParameterID()))
+            {
+                auto* e = xml.createNewChildElement ("P");
+                e->setAttribute ("id", rp->getParameterID());
+                e->setAttribute ("v", rp->convertFrom0to1 (rp->getValue()));
+            }
+
+    auto folder = getUserPresetFolder();
+    if (! folder.createDirectory()) return false;
+    const auto file = folder.getChildFile (name + ".sqpreset");
+    if (! xml.writeTo (file)) return false;
+
+    apvts.state.setProperty (presetNameProp, name.toUpperCase(), nullptr);
+    refreshUserPresets();
+    return true;
+}
+
 void SquelchProcessor::loadPreset (int index)
 {
-    if (! juce::isPositiveAndBelow (index, squelch::numFactoryPresets))
+    if (! juce::isPositiveAndBelow (index, getNumPresetsTotal()))
         return;
+
+    resetSoundToDefaults();
+
+    if (isUserPreset (index))
+    {
+        if (auto xml = juce::XmlDocument::parse (userPresetFiles[index - squelch::numFactoryPresets]))
+            for (auto* e : xml->getChildWithTagNameIterator ("P"))
+                if (auto* rp = apvts.getParameter (e->getStringAttribute ("id")))
+                {
+                    rp->beginChangeGesture();
+                    rp->setValueNotifyingHost (rp->convertTo0to1 ((float) e->getDoubleAttribute ("v")));
+                    rp->endChangeGesture();
+                }
+        apvts.state.setProperty (presetProp, index, nullptr);
+        apvts.state.setProperty (presetNameProp, getPresetDisplayName (index), nullptr);
+        return;
+    }
 
     const auto& preset = squelch::factoryPresets[index];
     for (int i = 0; i < squelch::numPresetParams; ++i)
@@ -290,6 +478,7 @@ void SquelchProcessor::loadPreset (int index)
         }
 
     apvts.state.setProperty (presetProp, index, nullptr);
+    apvts.state.setProperty (presetNameProp, getPresetDisplayName (index), nullptr);
 }
 
 int SquelchProcessor::getPage() const        { return (int) apvts.state.getProperty (pageProp, 0); }

@@ -5,6 +5,8 @@
 #include "AcidVoice.h"
 #include "Drive.h"
 #include "Sequencer.h"
+#include "Delay.h"
+#include "Presets.h"
 
 class SquelchProcessor : public juce::AudioProcessor
 {
@@ -29,7 +31,7 @@ public:
 
     // Factory presets are also exposed to the host's own preset menu.
     int getNumPrograms() override;
-    int getCurrentProgram() override { return getPresetIndex(); }
+    int getCurrentProgram() override { const int i = getPresetIndex(); return i < squelch::numFactoryPresets ? i : 0; }
     void setCurrentProgram (int index) override { loadPreset (index); }
     const juce::String getProgramName (int index) override;
     void changeProgramName (int, const juce::String&) override {}
@@ -38,8 +40,14 @@ public:
     void setStateInformation (const void* data, int sizeInBytes) override;
 
     // --- used by the editor
-    void loadPreset (int index);
+    void loadPreset (int index);       // factory presets first, then user presets
     int  getPresetIndex() const;
+    int  getNumPresetsTotal() const;
+    juce::String getPresetDisplayName (int index) const;
+    bool isUserPreset (int index) const { return index >= squelch::numFactoryPresets; }
+    bool saveUserPreset (const juce::String& name);  // saves the current sound, selects it
+    juce::File getUserPresetFolder() const;
+    void refreshUserPresets();
     int  getTheme() const;          // 0 = red, 1 = green
     void setTheme (int theme);
     int  getPage() const;           // 0 = synth, 1 = seq
@@ -57,6 +65,9 @@ public:
 
 private:
     void updateParams();
+    void resetSoundToDefaults();
+    bool isSoundParam (const juce::String& id) const;
+    juce::Array<juce::File> userPresetFiles;
     squelch::SeqSettings readSeqSettings() const;
 
     struct VoiceSink : squelch::NoteSink
@@ -70,6 +81,9 @@ private:
     squelch::DriveStage drive;
     juce::dsp::Oversampling<float> oversampling { 1, 2, juce::dsp::Oversampling<float>::filterHalfBandPolyphaseIIR, true };
     juce::AudioBuffer<float> monoBuffer;
+    squelch::PingPongDelay delay;
+    juce::Reverb reverb;
+    int reverbTail = 0;  // samples left to process after the reverb is switched off
 
     std::atomic<float>* pWave = nullptr;   std::atomic<float>* pPw = nullptr;
     std::atomic<float>* pTune = nullptr;   std::atomic<float>* pCutoff = nullptr;
@@ -89,6 +103,15 @@ private:
     std::atomic<float>* aOct = nullptr;   std::atomic<float>* aAcc = nullptr;
     std::atomic<float>* aSlide = nullptr; std::atomic<float>* aLatch = nullptr;
     std::atomic<float>* aChord = nullptr;
+
+    std::atomic<float>* mSoftAtk = nullptr; std::atomic<float>* mAccDecay = nullptr;
+    std::atomic<float>* mTrack = nullptr;   std::atomic<float>* mFm = nullptr;
+    std::atomic<float>* mSweep = nullptr;
+    std::atomic<float>* dOn = nullptr;   std::atomic<float>* dTime = nullptr;
+    std::atomic<float>* dFb = nullptr;   std::atomic<float>* dTone = nullptr;
+    std::atomic<float>* dMix = nullptr;
+    std::atomic<float>* rOn = nullptr;   std::atomic<float>* rSize = nullptr;
+    std::atomic<float>* rDamp = nullptr; std::atomic<float>* rMix = nullptr;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SquelchProcessor)
 };

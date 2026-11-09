@@ -292,12 +292,52 @@ private:
 class PresetBar : public juce::Component
 {
 public:
-    PresetBar (const Skin& s) : skin (s) { setMouseCursor (juce::MouseCursor::PointingHandCursor); }
+    PresetBar (const Skin& s) : skin (s)
+    {
+        setMouseCursor (juce::MouseCursor::PointingHandCursor);
+
+        // inline name editor for "Save current sound..."
+        nameEditor.setJustification (juce::Justification::centredRight);
+        nameEditor.setInputRestrictions (32);
+        nameEditor.setSelectAllWhenFocused (true);
+        nameEditor.onReturnKey = [this] { finishSave (true); };
+        nameEditor.onEscapeKey = [this] { finishSave (false); };
+        nameEditor.onFocusLost = [this] { finishSave (false); };
+        addChildComponent (nameEditor);
+    }
 
     std::function<int()> getIndex;
     std::function<int()> getCount;
+    std::function<int()> getFactoryCount;
     std::function<juce::String (int)> getName;
     std::function<void (int)> load;
+    std::function<bool (const juce::String&)> save;
+    std::function<void()> openFolder;
+
+    void startSave()
+    {
+        const auto& t = skin.theme;
+        nameEditor.setFont (skin.font (19.0f));
+        nameEditor.setColour (juce::TextEditor::backgroundColourId, t.presetDisplay);
+        nameEditor.setColour (juce::TextEditor::textColourId, t.accent);
+        nameEditor.setColour (juce::TextEditor::highlightColourId, t.accent.withAlpha (0.3f));
+        nameEditor.setColour (juce::TextEditor::outlineColourId, t.accent);
+        nameEditor.setColour (juce::TextEditor::focusedOutlineColourId, t.accent);
+        nameEditor.setColour (juce::CaretComponent::caretColourId, t.accent);
+        nameEditor.setText ("MY SOUND", false);
+        nameEditor.setVisible (true);
+        nameEditor.grabKeyboardFocus();
+        nameEditor.selectAll();
+        repaint();
+    }
+
+    void resized() override
+    {
+        const float bw = (float) getHeight();
+        auto r = getLocalBounds().toFloat().withTrimmedLeft (bw + 10.0f).withTrimmedRight (bw + 10.0f)
+                     .withTrimmedRight (shadowOff).withTrimmedBottom (shadowOff);
+        nameEditor.setBounds (r.reduced (44.0f, 7.0f).toNearestInt());
+    }
 
     void paint (juce::Graphics& g) override
     {
@@ -327,38 +367,76 @@ public:
         drawStickerBox (g, disp, 14.0f, t.presetDisplay, t.shadow, 0.0f, t.shadow, shadowOff);
 
         const int idx = getIndex ? getIndex() : 0;
-        auto text = disp.reduced (16.0f, 0.0f);
+        const int factory = getFactoryCount ? getFactoryCount() : 1000;
+        auto text = disp.reduced (14.0f, 0.0f);
         g.setColour (juce::Colours::white);
         g.setFont (skin.font (14.5f));
-        g.drawText ("PRESET " + juce::String (idx + 1).paddedLeft ('0', 2), text, juce::Justification::centredLeft, false);
-        g.setColour (t.accent);
-        g.setFont (skin.font (19.0f));
-        g.drawText (getName ? getName (idx) : juce::String(), text, juce::Justification::centredRight, true);
+        const auto label = nameEditor.isVisible() ? juce::String ("SAVE")
+                         : idx < factory ? juce::String (idx + 1).paddedLeft ('0', 2)
+                                         : "U" + juce::String (idx - factory + 1);
+        g.drawText (label, text, juce::Justification::centredLeft, false);
+        if (! nameEditor.isVisible())
+        {
+            g.setColour (t.accent);
+            g.setFont (skin.font (19.0f));
+            g.drawText (getName ? getName (idx) : juce::String(), text.withTrimmedLeft (36.0f), juce::Justification::centredRight, true);
+        }
     }
 
     void mouseUp (const juce::MouseEvent& e) override
     {
-        if (! getCount || ! load || ! getIndex) return;
+        if (! getCount || ! load || ! getIndex || nameEditor.isVisible()) return;
         const int n = getCount(), idx = getIndex();
         const float bw = (float) getHeight();
         if (e.position.x < bw)                    load ((idx + n - 1) % n);
         else if (e.position.x > getWidth() - bw)  load ((idx + 1) % n);
-        else
-        {
-            juce::PopupMenu menu;
-            for (int i = 0; i < n; ++i)
-                menu.addItem (i + 1, juce::String (i + 1).paddedLeft ('0', 2) + "   " + getName (i), true, i == idx);
-            menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this),
-                                [safe = juce::Component::SafePointer<PresetBar> (this)] (int result)
-                                {
-                                    if (safe != nullptr && result > 0 && safe->load) safe->load (result - 1);
-                                });
-        }
+        else showMenu();
         repaint();
     }
 
 private:
+    enum { saveId = 100000, folderId = 100001 };
+
+    void showMenu()
+    {
+        const int n = getCount(), idx = getIndex();
+        const int factory = getFactoryCount ? getFactoryCount() : n;
+
+        juce::PopupMenu menu;
+        menu.addItem (saveId, "Save current sound...");
+        menu.addSeparator();
+        menu.addSectionHeader ("FACTORY");
+        for (int i = 0; i < factory; ++i)
+            menu.addItem (i + 1, juce::String (i + 1).paddedLeft ('0', 2) + "   " + getName (i), true, i == idx);
+        menu.addSectionHeader ("YOUR PRESETS");
+        if (n == factory) menu.addItem (-1, "(none yet: use Save current sound)", false);
+        for (int i = factory; i < n; ++i)
+            menu.addItem (i + 1, "U" + juce::String (i - factory + 1) + "   " + getName (i), true, i == idx);
+        menu.addSeparator();
+        menu.addItem (folderId, "Open presets folder");
+
+        menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this),
+                            [safe = juce::Component::SafePointer<PresetBar> (this)] (int result)
+                            {
+                                if (safe == nullptr || result <= 0) return;
+                                if (result == saveId)        safe->startSave();
+                                else if (result == folderId) { if (safe->openFolder) safe->openFolder(); }
+                                else if (safe->load)         safe->load (result - 1);
+                                safe->repaint();
+                            });
+    }
+
+    void finishSave (bool doSave)
+    {
+        if (! nameEditor.isVisible()) return;
+        const auto name = nameEditor.getText().trim();
+        nameEditor.setVisible (false);
+        if (doSave && name.isNotEmpty() && save) save (name);
+        repaint();
+    }
+
     const Skin& skin;
+    juce::TextEditor nameEditor;
 };
 
 // ============================================================ output meter + volume
