@@ -58,7 +58,8 @@ public:
     juce::File writePatternMidi() const; // for dragging the pattern into the DAW
 
     std::atomic<float> displayCutoffHz { 1000.0f }; // live filter cutoff for the display
-    std::atomic<float> outputPeak { 0.0f };         // max |sample| since the editor last read it
+    std::atomic<float> outputPeak { 0.0f };
+    std::atomic<float> hostTempo { 0.0f };          // the DAW's tempo, 0 when there's no host (standalone)         // max |sample| since the editor last read it
 
     juce::AudioProcessorValueTreeState apvts;
 

@@ -141,6 +141,8 @@ public:
     }
 
     // Call once per block, before any tick(). Pass the sink so mode changes can silence notes.
+    // hostBpm > 0 means the host reports a tempo: it's used even while the host is stopped,
+    // so inside a DAW the sequencer always runs at the DAW's tempo. 0 = no host (standalone app).
     void beginBlock (const SeqSettings& s, bool hostPlaying, double hostPpq, double hostBpm, NoteSink& sink)
     {
         if (s.mode != settings.mode)
@@ -159,8 +161,9 @@ public:
 
         // clock source for this block
         useHost = hostPlaying;
-        hostClock.store (hostPlaying);
-        const double bpm = useHost ? (hostBpm > 1.0 ? hostBpm : 120.0) : std::clamp ((double) settings.bpm, 20.0, 300.0);
+        const bool hostTempo = hostBpm > 1.0;
+        hostClock.store (hostPlaying || hostTempo);
+        const double bpm = hostTempo ? hostBpm : (useHost ? 120.0 : std::clamp ((double) settings.bpm, 20.0, 300.0));
         ppqPerSample = bpm / 60.0 / sr;
 
         // should the sequencer be running?

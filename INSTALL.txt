@@ -34,7 +34,9 @@ Click SEQ at the top to switch pages. Choose a mode:
 - PATTERN: plays the 16 steps. Three ways to start it:
   * hold a key on your keyboard or a note in the piano roll: it plays from step 1 in that key
     (middle C = as written; FL calls it C5) and stops when you let go
-  * press PLAY: runs on its own clock (BPM)
+  * press PLAY: runs on its own
+  Inside FL the tempo is always FL's (the BPM box shows it, e.g. "140 FL").
+  The BPM box only sets the tempo in the standalone app.
   * start FL: follows FL's tempo; keys then transpose it
 - ARP: hold notes on your keyboard and it arpeggiates them.
 

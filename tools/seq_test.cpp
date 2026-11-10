@@ -141,6 +141,20 @@ int main()
         check (onGrid && playingAfter, "with PLAY on, a key doesn't restart the pattern, it keeps running in time");
     }
 
+    { // 11. host reports 140 bpm but is stopped: key-triggered pattern runs at 140, not the 130 box
+        Sequencer s; s.prepare (sr); Rec r;
+        SeqSettings st; st.mode = seqPattern; st.bpm = 130;
+        const int bs = 480; long t = 0;
+        for (int b = 0; b < 60; ++b)
+        {
+            s.beginBlock (st, false, 0.0, 140.0, r);   // stopped, tempo known
+            for (int i = 0; i < bs; ++i) { if (t == 0) s.midiNote (60, true, 100, r); r.now = t; s.tick (r); ++t; }
+        }
+        std::vector<long> ons; for (auto& e : r.ev) if (e.on) ons.push_back (e.t);
+        const long step140 = (long) std::lround (sr * 60.0 / 140.0 / 4.0);
+        check (ons.size() >= 2 && std::labs ((ons[1] - ons[0]) - step140) <= 1, "FL stopped at 140 bpm: steps use 140, not the box");
+    }
+
     std::printf (fails ? "\n%d FAILED\n" : "\nall passed\n", fails);
     return fails ? 1 : 0;
 }

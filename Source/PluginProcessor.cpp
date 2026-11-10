@@ -275,7 +275,8 @@ void SquelchProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
             if (auto q = pos->getPpqPosition()) { hostPpq = *q; hostPlaying = pos->getIsPlaying(); }
         }
 
-    seq.beginBlock (readSeqSettings(), hostPlaying, hostPpq, hostBpm, sink);
+    seq.beginBlock (readSeqSettings(), hostPlaying, hostPpq, hostBpmKnown ? hostBpm : 0.0, sink);
+    hostTempo.store (hostBpmKnown ? (float) hostBpm : 0.0f);
 
     int pos = 0;
     auto renderTo = [&] (int end)

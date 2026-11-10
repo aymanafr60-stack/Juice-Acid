@@ -122,6 +122,14 @@ SquelchView::SquelchView (SquelchProcessor& p, Skin& s)
     };
     play.init();
     grid.getLength = [this] { return (int) std::round (value ("seq_len")); };
+    // inside FL the tempo is FL's: show it, and dim the box (it only applies in the standalone app)
+    bpmStep.valueText = [this]
+    {
+        const float host = proc.hostTempo.load();
+        return host > 0.0f ? juce::String (host, std::abs (host - std::round (host)) < 0.05f ? 0 : 1) + " FL"
+                           : juce::String ((int) value ("seq_bpm")) + " bpm";
+    };
+    bpmStep.setTooltip ("Inside FL the sequencer always follows FL's tempo. This box is only used in the standalone app");
     dragMidi.makeFile = [this] { return proc.writePatternMidi(); };
     clear.onClick    = [this] { clearPattern(); };
     generate.onClick = [this] { generateLine (false); };
@@ -247,7 +255,13 @@ void SquelchView::tick()
     if (idx != lastPresetShown) { lastPresetShown = idx; presetBar.repaint(); }
 
     refreshVisibility();
-    if (page == 1) grid.repaint();
+    if (page == 1)
+    {
+        grid.repaint();
+        const bool hostTempo = proc.hostTempo.load() > 0.0f;
+        bpmStep.setAlpha (hostTempo ? 0.5f : 1.0f);
+        bpmStep.repaint();
+    }
 
     const int ok = proc.seq.printOk.load(), fail = proc.seq.printFail.load();
     const auto now = juce::Time::getMillisecondCounter();
@@ -455,8 +469,9 @@ void SquelchView::paintFooter (juce::Graphics& g)
     const int mode = (int) value ("seq_mode");
     const int step = proc.seq.currentStep.load();
     const bool running = step >= 0 && mode != squelch::seqOff;
-    const juce::String clock = proc.seq.hostClock.load() ? juce::String ("FL tempo")
-                                                         : juce::String ((int) value ("seq_bpm")) + " bpm";
+    const float host = proc.hostTempo.load();
+    const juce::String clock = host > 0.0f ? juce::String (juce::roundToInt (host)) + " bpm (FL)"
+                                           : juce::String ((int) value ("seq_bpm")) + " bpm";
     juce::String status;
     if (toast.isNotEmpty())               status = toast;
     else if (mode == squelch::seqOff)     status = "off";
