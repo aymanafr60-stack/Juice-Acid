@@ -1,0 +1,307 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+@font-face { font-family: Manrope; font-weight: 800; src: url("file:///home/claude/juice-acid/Resources/Manrope-800.ttf"); }
+@font-face { font-family: Plex; font-weight: 500; src: url("file:///tmp/claude-0/-home-claude/61c504fb-dc56-55a9-a2f5-9207483eb6cd/scratchpad/fontsrc/gf/ofl/ibmplexmono/IBMPlexMono-Medium.ttf"); }
+@font-face { font-family: Plex; font-weight: 700; src: url("file:///tmp/claude-0/-home-claude/61c504fb-dc56-55a9-a2f5-9207483eb6cd/scratchpad/fontsrc/gf/ofl/ibmplexmono/IBMPlexMono-Bold.ttf"); }
+@font-face { font-family: Dot; src: url("file:///tmp/claude-0/-home-claude/61c504fb-dc56-55a9-a2f5-9207483eb6cd/scratchpad/fontsrc/gf/ofl/dotgothic16/DotGothic16-Regular.ttf"); }
+
+:root { --ink: #3a1236; --ink2: #6b3a64; --bezel: #3a2338; --phos: #7dff8e; --led: #ffe24a; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { width: 1000px; height: 600px; overflow: hidden; background: #000; }
+#ui {
+  position: relative; width: 1000px; height: 600px; overflow: hidden;
+  /* beige lab plastic... */
+  background: linear-gradient(180deg, #eee2dc, #d7c8c2 55%, #b9a8a6);
+  font-family: Plex, monospace; color: var(--ink);
+}
+/* ...lit by pink from above and purple from the lower left (multiply = coloured light on the surface) */
+#tint { position: absolute; inset: 0; mix-blend-mode: multiply; pointer-events: none;
+  background:
+    radial-gradient(90% 75% at 50% -15%, #ff7fdc 0%, #ec86d6 45%, rgba(236,134,214,0) 80%),
+    radial-gradient(80% 80% at -5% 105%, #8a5cff 0%, rgba(138,92,255,0) 70%),
+    linear-gradient(180deg, #f39ae0, #d98ad3 50%, #a57ad8); }
+/* surface sheen: the light strip reflected on the plastic */
+#sheen { position: absolute; inset: 0; pointer-events: none; mix-blend-mode: screen;
+  background:
+    linear-gradient(105deg, rgba(255,255,255,0) 18%, rgba(255,190,240,.35) 24%, rgba(255,255,255,0) 31%),
+    linear-gradient(105deg, rgba(255,255,255,0) 63%, rgba(255,170,235,.22) 67%, rgba(255,255,255,0) 72%),
+    linear-gradient(180deg, rgba(255,210,245,.5), rgba(255,210,245,0) 12%); }
+#grain { position: absolute; inset: 0; pointer-events: none; opacity: .2; mix-blend-mode: multiply; }
+#vignette { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(120% 100% at 50% 40%, rgba(0,0,0,0) 60%, rgba(60,0,70,.35)); }
+.abs { position: absolute; }
+.over { z-index: 2; }
+
+.title { left: 84px; top: 9px; font-family: Manrope; font-weight: 800; font-size: 34px; letter-spacing: .5px; color: var(--ink);
+  text-shadow: 0 1px 0 rgba(255,220,245,.7); }
+.kata { left: 86px; top: 50px; font-family: Dot; font-size: 13px; color: var(--ink2); letter-spacing: 2px; }
+.code { left: 168px; top: 53px; font-size: 8.5px; font-weight: 700; color: var(--ink2); letter-spacing: 1.2px; }
+
+/* push buttons: pink light catches the top face and edge, magenta shadow underneath */
+.btn { height: 36px; border-radius: 5px;
+  background: linear-gradient(180deg, #ffe6f8 0%, #f2c2e6 30%, #d9a0d0 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.95), inset 0 -2px 3px rgba(150,50,140,.25), 0 2px 0 #8a3f83, 0 4px 8px rgba(90,0,90,.45);
+  font-weight: 700; font-size: 11px; letter-spacing: 1.4px; color: var(--ink);
+  display: flex; align-items: center; justify-content: center; gap: 7px; }
+.led { width: 8px; height: 8px; border-radius: 2px; background: #6d4a3a; box-shadow: inset 0 1px 1px rgba(0,0,0,.5); }
+.led.on { background: var(--led); box-shadow: 0 0 6px var(--led), 0 0 12px rgba(255,226,74,.7); }
+.btn.on { background: linear-gradient(180deg, #fff6d0, #fbd97e 45%, #eeb85a); }
+
+.vfd { background: #061114; border-radius: 6px; color: var(--phos); text-shadow: 0 0 6px rgba(125,255,142,.8); font-family: Dot;
+  box-shadow: inset 0 2px 6px rgba(0,0,0,.8), 0 0 0 3px var(--bezel), 0 0 0 4px rgba(255,170,235,.6), 0 3px 8px rgba(80,0,80,.4); overflow: hidden; }
+.vfd::after { content: ""; position: absolute; inset: 0; background: linear-gradient(170deg, rgba(255,110,220,.22), rgba(255,110,220,0) 40%); }
+
+.sect { border: 1.5px solid rgba(58,18,54,.55); border-radius: 10px; box-shadow: inset 0 1px 0 rgba(255,220,245,.5); }
+.tag { position: absolute; top: -9px; left: 16px; background: var(--ink); color: #f7d8ef; font-weight: 700; font-size: 10px;
+  letter-spacing: 2.2px; padding: 3px 8px; border-radius: 3px; }
+.tag2 { position: absolute; top: 9px; right: 14px; font-size: 8.5px; font-weight: 700; letter-spacing: 1px; color: var(--ink2); padding: 0 6px; }
+
+.lbl { font-weight: 700; font-size: 10px; letter-spacing: 1.6px; color: var(--ink); }
+.foot { left: 0; top: 556px; width: 1000px; height: 44px; background: linear-gradient(180deg, #2a0f29, #1a0719);
+  border-top: 2px solid #b44aa6; box-shadow: 0 -1px 0 rgba(255,150,230,.6); color: #f2c9e8; font-size: 10.5px; font-weight: 700; letter-spacing: 1.3px; }
+</style></head>
+<body><div id="ui">
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2.2" result="b1"/><feGaussianBlur in="SourceGraphic" stdDeviation="6" result="b2"/>
+      <feMerge><feMergeNode in="b2"/><feMergeNode in="b1"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="soft" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="3"/></filter>
+    <filter id="noise"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 .3  0 0 0 0 .1  0 0 0 0 .3  0 0 0 .9 0"/></filter>
+    <pattern id="scan" width="4" height="3" patternUnits="userSpaceOnUse"><rect width="4" height="1" fill="rgba(0,0,0,.35)"/></pattern>
+    <radialGradient id="knobCap" cx="40%" cy="30%" r="75%"><stop offset="0" stop-color="#8a5a84"/><stop offset=".5" stop-color="#2e1a2c"/><stop offset="1" stop-color="#170b16"/></radialGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffb6ec"/><stop offset=".45" stop-color="#ff8fe0" stop-opacity=".25"/><stop offset="1" stop-color="#ff8fe0" stop-opacity="0"/></linearGradient>
+    <linearGradient id="skirt" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7a4573"/><stop offset=".5" stop-color="#3b2438"/><stop offset="1" stop-color="#221420"/></linearGradient>
+  </defs>
+</svg>
+<div id="tint"></div><div id="sheen"></div>
+<svg id="grain" width="1000" height="600"><rect width="1000" height="600" filter="url(#noise)"/></svg>
+<div id="vignette"></div>
+
+<div class="over">
+<!-- header -->
+<div class="abs" style="left:18px;top:12px;width:50px;height:50px;border-radius:50%;background:#071419;
+  box-shadow:0 0 0 4px var(--bezel),0 0 0 5px rgba(255,170,235,.7),0 3px 8px rgba(80,0,80,.5);overflow:hidden">
+  <svg id="logo" width="50" height="50"></svg></div>
+<div class="abs title">SQUELCH</div>
+<div class="abs kata">スクエルチ</div>
+<div class="abs code">SQ-303 // ACID BASS OSCILLATOR // CH1</div>
+
+<div class="abs btn on" style="left:420px;top:18px;width:82px"><span class="led on"></span>SYNTH</div>
+<div class="abs btn" style="left:510px;top:18px;width:70px"><span class="led"></span>SEQ</div>
+<div class="abs btn" style="left:588px;top:18px;width:58px"><span class="led"></span>FX</div>
+<div class="abs btn" style="left:672px;top:18px;width:36px">&#9664;</div>
+<div class="abs vfd" style="left:720px;top:18px;width:216px;height:36px;display:flex;align-items:center;padding:0 12px;gap:12px;font-size:16px">
+  <span style="opacity:.6">04</span><span>ACID SCREAM</span><span style="margin-left:auto;font-size:11px;opacity:.7">&#9660;</span></div>
+<div class="abs btn" style="left:948px;top:18px;width:36px">&#9654;</div>
+<div class="abs" style="left:0;top:76px;width:1000px;height:2px;background:rgba(58,18,54,.45);box-shadow:0 1px 0 rgba(255,200,240,.6)"></div>
+
+<div class="abs sect" style="left:18px;top:98px;width:232px;height:440px"><div class="tag">OSCILLATOR</div><div class="tag2">VCO-1</div></div>
+<div class="abs sect" style="left:266px;top:98px;width:458px;height:440px"><div class="tag">FILTER + ENVELOPE</div><div class="tag2">24 dB/OCT LPF</div></div>
+<div class="abs sect" style="left:740px;top:98px;width:242px;height:440px"><div class="tag">DRIVE</div><div class="tag2">OD · DIST · FUZZ</div></div>
+
+<div class="abs btn on" style="left:36px;top:122px;width:94px"><span class="led on"></span>SAW</div>
+<div class="abs btn" style="left:138px;top:122px;width:94px"><span class="led"></span>SQUARE</div>
+<div class="abs btn" style="left:36px;top:168px;width:94px"><span class="led"></span>PULSE</div>
+<div class="abs btn" style="left:138px;top:168px;width:94px"><span class="led"></span>SUPER</div>
+
+<!-- filter CRT -->
+<div id="crtbox" class="abs" style="left:284px;top:120px;width:422px;height:168px;border-radius:14px;
+  background:linear-gradient(180deg,#6a3a63,#3a2338 35%,#241522);
+  box-shadow: inset 0 1px 0 rgba(255,180,240,.8), inset 0 0 0 2px rgba(255,255,255,.08), 0 5px 12px rgba(80,0,80,.5)">
+  <svg id="crt" class="abs" style="left:12px;top:12px" width="398" height="144"></svg>
+  <div class="abs" style="left:4px;top:4px;width:6px;height:6px;border-radius:50%;background:#c58bbd"></div>
+  <div class="abs" style="right:4px;top:4px;width:6px;height:6px;border-radius:50%;background:#c58bbd"></div>
+  <div class="abs" style="left:4px;bottom:4px;width:6px;height:6px;border-radius:50%;background:#7a5a76"></div>
+  <div class="abs" style="right:4px;bottom:4px;width:6px;height:6px;border-radius:50%;background:#7a5a76"></div>
+</div>
+
+<div class="abs" style="left:758px;top:118px;display:flex;align-items:center;gap:8px">
+  <svg width="34" height="34" viewBox="0 0 34 34"><circle cx="17" cy="17" r="12" fill="#e9d2e3" stroke="#6b3a64" stroke-width="1.5"/>
+    <circle cx="17" cy="17" r="7" fill="#b48fae"/><rect x="14.5" y="2" width="5" height="16" rx="2.5" fill="#fff0fa" stroke="#6b3a64"/></svg>
+  <span class="lbl">ON</span><span class="led on" style="margin-left:6px"></span></div>
+<div class="abs btn" style="left:758px;top:164px;width:66px"><span class="led"></span>OD</div>
+<div class="abs btn on" style="left:830px;top:164px;width:68px"><span class="led on"></span>DIST</div>
+<div class="abs btn" style="left:904px;top:164px;width:62px"><span class="led"></span>FUZZ</div>
+
+<div id="knobs"></div>
+
+<div class="abs foot">
+  <div class="abs" style="left:18px;top:14px;display:flex;align-items:center;gap:8px"><span class="led on" style="background:var(--phos);box-shadow:0 0 6px var(--phos)"></span>MIDI <span style="opacity:.7;font-weight:500">MONO / LEGATO SLIDE</span></div>
+  <div class="abs" style="left:250px;top:14px;display:flex;align-items:center;gap:8px"><span class="led on" style="background:var(--phos);box-shadow:0 0 6px var(--phos)"></span>SEQ <span style="opacity:.7;font-weight:500">PLAYING · STEP 05 · 140 BPM (FL)</span></div>
+  <svg class="abs" style="left:560px;top:12px" width="70" height="20" id="barcode"></svg>
+  <div class="abs" style="left:636px;top:16px;font-size:8px;opacity:.6;font-weight:500">SN 0420-0303</div>
+  <div class="abs" style="left:748px;top:14px">OUT</div>
+  <svg class="abs" style="left:784px;top:12px" width="150" height="20" id="meter"></svg>
+  <div class="abs" style="left:940px;top:14px;font-family:Dot;color:var(--phos);text-shadow:0 0 5px var(--phos)">-6.2</div>
+</div>
+</div>
+
+<script>
+const NS = "http://www.w3.org/2000/svg";
+const el = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+const rnd = (seed => () => (seed = (seed * 16807) % 2147483647) / 2147483647)(42);
+
+// glitched horned smiley: wobbly hand-drawn outline, blob eyes, crooked smile,
+// two sliced glitch bands, and pink/cyan colour-split ghosts
+let gid = 0;
+function smiley(parent, cx, cy, r, attrs) {
+  const sw = parseFloat(attrs["stroke-width"] || 1.8), col = attrs.stroke || "#7dff8e";
+  const wob = (i) => 1 + 0.012 * Math.sin(i * 1.7) + 0.008 * Math.sin(i * 4.1 + 1);
+  const P = (a, k = 1) => [cx + r * k * Math.sin(a), cy - r * k * Math.cos(a)];
+  const pts = [];
+  const arc = (a0, a1, n) => { for (let i = 0; i <= n; i++) { const a = a0 + (a1 - a0) * i / n; pts.push(P(a, wob(pts.length))); } };
+  const horn = (side) => {                       // outer base -> tip -> inner base (or reversed on the right)
+    const q = (t, p0, c, p1) => [(1-t)*(1-t)*p0[0] + 2*(1-t)*t*c[0] + t*t*p1[0], (1-t)*(1-t)*p0[1] + 2*(1-t)*t*c[1] + t*t*p1[1]];
+    const outer = P(side * 0.98), inner = P(side * 0.56), tip = [cx + side * r * 0.9, cy - r * 1.36];
+    const co = [cx + side * r * 1.16, cy - r * 0.98], ci = [cx + side * r * 0.66, cy - r * 1.0];
+    const seq = [];
+    for (let i = 0; i <= 8; i++) seq.push(q(i / 8, outer, co, tip));
+    for (let i = 1; i <= 8; i++) seq.push(q(i / 8, tip, ci, inner));
+    return side < 0 ? seq : seq.reverse();
+  };
+  pts.push(...horn(-1)); arc(-0.56, 0.56, 10); pts.push(...horn(1)); arc(0.98, 2 * Math.PI - 0.98, 34);
+  // little glitch notches on the sides
+
+  const outline = "M" + pts.map(p => p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" L") + " Z";
+
+  const eye = (ex, ey, flip) => { const w = r * .1, h = r * .2;
+    return `M${ex} ${ey - h} C${ex + w * 1.3 * flip} ${ey - h} ${ex + w * .9 * flip} ${ey - h * .1} ${ex + w * 1.25 * flip} ${ey + h * .25}` +
+           ` C${ex + w * .8 * flip} ${ey + h * 1.05} ${ex - w * 1.1 * flip} ${ey + h * 1.05} ${ex - w * 1.05 * flip} ${ey + h * .1}` +
+           ` C${ex - w * 1.0 * flip} ${ey - h * .7} ${ex - w * .5 * flip} ${ey - h} ${ex} ${ey - h} Z`; };
+  const eyes = eye(cx - r * .32, cy - r * .16, -1) + " " + eye(cx + r * .32, cy - r * .16, 1);
+  const smile = `M${cx - r*.62} ${cy + r*.22} Q${cx - r*.45} ${cy + r*.5} ${cx - r*.28} ${cy + r*.48}` +
+                ` L${cx - r*.25} ${cy + r*.56} Q${cx + r*.1} ${cy + r*.72} ${cx + r*.42} ${cy + r*.5}` +
+                ` L${cx + r*.46} ${cy + r*.42} Q${cx + r*.58} ${cy + r*.36} ${cx + r*.64} ${cy + r*.2}`;
+
+  const drawSet = (g, color, width, fillEyes, op) => {
+    el("path", { d: outline, stroke: color, "stroke-width": width, fill: "none", opacity: op, "stroke-linejoin": "round" }, g);
+    el("path", { d: smile, stroke: color, "stroke-width": width * 1.1, fill: "none", opacity: op, "stroke-linecap": "round", "stroke-linejoin": "round" }, g);
+    el("path", { d: eyes, fill: fillEyes ? color : "none", stroke: color, "stroke-width": width * .6, opacity: op }, g);
+  };
+  const root = el("g", { opacity: attrs.opacity ?? 1 }, parent);
+  const id = "gl" + (gid++);
+  // glitch bands: two horizontal slices shifted sideways
+  const bands = [[cy - r * .5, r * .09, -r * .08], [cy + r * .62, r * .1, r * .1]];
+  const defs = el("defs", {}, root);
+  const keep = el("clipPath", { id: id + "k" }, defs);
+  let yPrev = cy - r * 2;
+  bands.forEach(([y, h]) => { el("rect", { x: cx - r * 2, y: yPrev, width: r * 4, height: y - yPrev }, keep); yPrev = y + h; });
+  el("rect", { x: cx - r * 2, y: yPrev, width: r * 4, height: cy + r * 2 - yPrev }, keep);
+  const layer = (dx, dy, clip) => { const g = el("g", { transform: `translate(${dx} ${dy})` }, root); if (clip) g.setAttribute("clip-path", `url(#${clip})`); return g; };
+  const paint = (g) => {
+    drawSet(layer(-sw * .9, 0, null).appendChild(el("g", {}, g)) && g, "#ff4fd2", sw, false, .55);
+  };
+  const pieces = [[0, id + "k"]];
+  bands.forEach(([y, h, dx], i) => { const c = el("clipPath", { id: id + "b" + i }, defs); el("rect", { x: cx - r * 2, y, width: r * 4, height: h }, c); pieces.push([dx, id + "b" + i]); });
+  for (const [dx, clip] of pieces) {
+    const g = el("g", { "clip-path": `url(#${clip})` }, root);
+    const inner = el("g", { transform: `translate(${dx} 0)` }, g);
+    const off = Math.max(1, r * .045);
+    drawSet(el("g", { transform: `translate(${-off} ${-off * .3})` }, inner), "#ff4fd2", sw * .9, false, .55);
+    drawSet(el("g", { transform: `translate(${off} ${off * .3})` }, inner), "#5ad8ff", sw * .9, false, .55);
+    const main = el("g", { filter: attrs.filter || "" }, inner);
+    drawSet(main, col, sw, true, 1);
+  }
+  return root;
+}
+smiley(document.getElementById("logo"), 25, 28, 12.5, { stroke: "#7dff8e", "stroke-width": 1.5, filter: "url(#glow)" });
+
+// ---------- CRT: everything in draw(t) so the same code renders stills and animation frames
+const crt = document.getElementById("crt"), W = 398, H = 144;
+const FC0 = 288, RES = 0.95;
+const mag = (f, fc) => { const w = f / fc, k = 3.95 * Math.min(RES, .92); let re = 1, im = 0;
+  for (let n = 0; n < 4; n++) { const r2 = re - im * w, i2 = re * w + im; re = r2; im = i2; } re += k;
+  return 20 * Math.log10((1 + 0.6 * k) / Math.hypot(re, im) + 1e-9); };
+const X = f => W * Math.log(f / 20) / Math.log(1000), Y = db => H * (0.1 + (22 - db) / 78);
+const curvePath = (fc, jitter) => { let d = ""; for (let i = 0; i <= 260; i++) { const f = 20 * Math.pow(1000, i / 260);
+  d += (i ? "L" : "M") + X(f).toFixed(1) + " " + (Math.min(H + 5, Math.max(4, Y(mag(f, fc)))) + (jitter ? (rnd() - .5) * jitter : 0)).toFixed(1); } return d; };
+
+// envelope: a 16th note every 0.115 s at 130 bpm, accents on 1 and 7
+function cutoffAt(t) { const step = 60 / 130 / 4, n = Math.floor(t / step), dt = t - n * step;
+  const acc = [0, 6, 10].includes(n % 16), env = Math.exp(-dt / (acc ? .09 : .16)) * (acc ? 2.6 : 1.7);
+  return FC0 * Math.pow(2, env); }
+
+// a band-limited filtered saw at the note, for the live waveform trace
+function wavePath(t, fc) { let d = ""; const f0 = 55, cyc = 3.2; const step = 60 / 130 / 4, n = Math.floor(t / step);
+  const notes = [0,0,12,3,0,0,7,5,0,-2,0,12,3,0,5,7], fn = f0 * Math.pow(2, notes[n % 16] / 12);
+  for (let i = 0; i <= 300; i++) { const ph = i / 300 * cyc * Math.PI * 2; let y = 0;
+    for (let h = 1; h <= 40; h++) { const fh = fn * h; const g = Math.pow(10, mag(fh, fc) / 20); y += Math.sin(h * (ph + t * 30)) / h * g; }
+    d += (i ? "L" : "M") + (i / 300 * W).toFixed(1) + " " + (H * .8 - y * 5).toFixed(1); } return d; }
+
+function draw(t, live) {
+  crt.innerHTML = "";
+  el("rect", { width: W, height: H, rx: 8, fill: "#071419" }, crt);
+  const g = el("g", { stroke: "#1f4a52", "stroke-width": 1 }, crt);
+  for (let i = 1; i < 10; i++) el("line", { x1: i * W / 10, y1: 0, x2: i * W / 10, y2: H }, g);
+  for (let j = 1; j < 6; j++) el("line", { x1: 0, y1: j * H / 6, x2: W, y2: j * H / 6 }, g);
+  const tk = el("g", { stroke: "#2f6e78", "stroke-width": 1 }, crt);
+  for (let i = 0; i < 50; i++) el("line", { x1: i * W / 50, y1: H / 2 - 3, x2: i * W / 50, y2: H / 2 + 3 }, tk);
+  for (let j = 0; j < 30; j++) el("line", { x1: W / 2 - 3, y1: j * H / 30, x2: W / 2 + 3, y2: j * H / 30 }, tk);
+
+  smiley(crt, W / 2, H / 2 + 8, 40, { stroke: "#7dff8e", "stroke-width": 1.8, filter: "url(#glow)", opacity: live ? .45 + .08 * Math.sin(t * 9) : .5 });
+
+  const fc = live ? cutoffAt(t) : FC0;
+  if (live) {
+    // phosphor persistence: the last few positions fade out behind the beam
+    for (let k = 6; k >= 1; k--) el("path", { d: curvePath(cutoffAt(Math.max(0, t - k * .025)), 0), stroke: "#7dff8e", "stroke-width": 2, fill: "none", opacity: .09 * (7 - k) / 6 * 1.6 }, crt);
+    el("path", { d: wavePath(t, fc), stroke: "#5aa8ff", "stroke-width": 1.2, fill: "none", filter: "url(#glow)", opacity: .5 }, crt);
+  } else {
+    el("path", { d: wavePath(0.02, FC0 * 2.2), stroke: "#5aa8ff", "stroke-width": 1.2, fill: "none", filter: "url(#glow)", opacity: .5 }, crt);
+  }
+  el("path", { d: curvePath(fc, live ? .8 : 0), stroke: "#7dff8e", "stroke-width": 2.2, fill: "none", filter: "url(#glow)", opacity: live ? .92 + .08 * Math.sin(t * 50) : 1 }, crt);
+
+  const lab = (txt, x, y, anchor = "start", c = "#7dff8e") => { const e = el("text", { x, y, fill: c, "font-family": "Dot", "font-size": 11, "text-anchor": anchor, opacity: .85 }, crt); e.textContent = txt; };
+  lab("CH1 LPF 24", 8, 14); lab("CH2 OUT", 8, 28, "start", "#5aa8ff"); lab("RES 95%", W - 8, 14, "end");
+  lab("20Hz", 8, H - 8); lab("20kHz", W - 8, H - 8, "end");
+  const hz = Math.round(fc); lab((hz < 1000 ? hz + " Hz" : (hz / 1000).toFixed(1) + " kHz"), X(fc) + 8, Math.max(26, Y(mag(fc, fc)) + 4));
+
+  // the room's pink light reflected on the glass: a soft glare, and the ceiling LED strip as a thin streak
+  el("ellipse", { cx: W * .22, cy: -10, rx: W * .45, ry: 46, fill: "rgba(255,110,220,.20)", filter: "url(#soft)" }, crt);
+  el("path", { d: `M${W*.04} 10 Q${W*.5} 2 ${W*.96} 12`, stroke: "rgba(255,140,230,.55)", "stroke-width": 2.2, fill: "none", filter: "url(#soft)" }, crt);
+  el("path", { d: `M${W*.62} ${H} L${W*.78} 0`, stroke: "rgba(255,120,225,.10)", "stroke-width": 26, fill: "none", filter: "url(#soft)" }, crt);
+  el("rect", { width: W, height: H, rx: 8, fill: "url(#scan)" }, crt);
+}
+
+// ---------- knobs with a pink rim light and a specular highlight
+function knob(cx, cy, size, v, label, readout) {
+  const host = document.getElementById("knobs");
+  const box = document.createElement("div"); box.className = "abs"; host.appendChild(box);
+  const w = size + 46; box.style.left = (cx - w / 2) + "px"; box.style.top = (cy - w / 2) + "px";
+  const s = el("svg", { width: w, height: w + 34 }, box);
+  const c = w / 2, R = size / 2, a0 = -135, a1 = 135, ang = a0 + v * (a1 - a0);
+  const pt = (r, a) => [c + r * Math.sin(a * Math.PI / 180), c - r * Math.cos(a * Math.PI / 180)];
+  for (let i = 0; i <= 10; i++) { const a = a0 + i * 27, [x1, y1] = pt(R + 6, a), [x2, y2] = pt(R + (i % 5 ? 10 : 14), a);
+    el("line", { x1, y1, x2, y2, stroke: "#3a1236", "stroke-width": i % 5 ? 1.2 : 2, opacity: .8 }, s); }
+  el("ellipse", { cx: c, cy: c + R * .18 + 2, rx: R * 1.02, ry: R * .95, fill: "rgba(90,0,90,.45)", filter: "url(#soft)" }, s);
+  el("circle", { cx: c, cy: c, r: R, fill: "url(#skirt)" }, s);
+  for (let i = 0; i < 48; i++) { const a = i * 7.5, [x1, y1] = pt(R - 1, a), [x2, y2] = pt(R - 4, a);
+    const lit = Math.cos(a * Math.PI / 180) > .3; el("line", { x1, y1, x2, y2, stroke: lit ? "#c27ab7" : "#5c3d58", "stroke-width": 1.4 }, s); }
+  el("circle", { cx: c, cy: c, r: R, fill: "none", stroke: "url(#rim)", "stroke-width": 1.6 }, s);
+  el("circle", { cx: c, cy: c, r: R * .74, fill: "url(#knobCap)", stroke: "#1a0d19", "stroke-width": 1 }, s);
+  el("ellipse", { cx: c - R * .2, cy: c - R * .38, rx: R * .34, ry: R * .14, fill: "rgba(255,170,235,.45)", filter: "url(#soft)" }, s);
+  const [ix1, iy1] = pt(R * .2, ang), [ix2, iy2] = pt(R * .95, ang);
+  el("line", { x1: ix1, y1: iy1, x2: ix2, y2: iy2, stroke: "#fff4fb", "stroke-width": size > 60 ? 3.2 : 2.4, "stroke-linecap": "round" }, s);
+  const t = el("text", { x: c, y: w + 6, "text-anchor": "middle", "font-family": "Plex", "font-weight": 700, "font-size": 10, "letter-spacing": 1.6, fill: "#3a1236" }, s); t.textContent = label;
+  const rw = readout.length * 7.4 + 14;
+  el("rect", { x: c - rw / 2, y: w + 13, width: rw, height: 17, rx: 3, fill: "#061114" }, s);
+  const r = el("text", { x: c, y: w + 26, "text-anchor": "middle", "font-family": "Dot", "font-size": 12, fill: "#7dff8e", filter: "url(#glow)" }, s); r.textContent = readout;
+}
+knob(84, 262, 46, .5, "TUNE", "+0 st"); knob(186, 262, 46, .5, "PW", "n/a");
+knob(84, 392, 46, 0, "SUB", "0%");   knob(186, 392, 46, .2, "SLIDE", "50 ms");
+knob(314, 366, 46, .7, "ENV MOD", "70%"); knob(414, 352, 76, .37, "CUTOFF", "288 Hz"); knob(522, 352, 76, .95, "RESONANCE", "95%");
+knob(612, 366, 46, .55, "DECAY", "623 ms"); knob(680, 366, 46, .8, "ACCENT", "80%");
+knob(806, 258, 46, .6, "DRIVE", "60%"); knob(914, 258, 46, .75, "TONE", "75%");
+knob(806, 392, 46, .6, "LEVEL", "-1.2 dB"); knob(914, 392, 46, 1, "MIX", "100%");
+
+(() => { const b = document.getElementById("barcode"); let xx = 0; [2,1,1,3,1,2,1,1,2,3,1,1,2,1,3,1,2,2,1,1].forEach((w, i) => {
+  if (i % 2 == 0) el("rect", { x: xx, y: 0, width: w * 1.3, height: 20, fill: "#f2c9e8", opacity: .75 }, b); xx += w * 1.3 + .6; }); })();
+(() => { const m = document.getElementById("meter"); for (let r = 0; r < 2; r++) for (let i = 0; i < 22; i++) {
+  const lit = i < 16, hot = i >= 19; el("rect", { x: i * 6.8, y: r * 10, width: 5, height: 7, rx: 1, fill: lit ? (hot ? "#ff4fd2" : "#7dff8e") : "#3b1638", filter: lit ? "url(#glow)" : "" }, m); } })();
+
+const params = new URLSearchParams(location.search);
+draw(parseFloat(params.get("t") || "0"), params.has("live"));
+window.drawFrame = (t) => draw(t, true);
+</script>
+</body></html>

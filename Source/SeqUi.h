@@ -1,4 +1,4 @@
-// Squelch — SEQ page components: step grid and the drag-MIDI button (flat style, v0.7).
+// Squelch — SEQ page components: step grid and the drag-MIDI button (hardware style, v0.8).
 #pragma once
 
 #include "Ui.h"
@@ -11,7 +11,7 @@ namespace squelch::ui
 class DragMidiButton : public Btn
 {
 public:
-    explicit DragMidiButton (const Skin& s) : Btn (s, "DRAG MIDI", Style::outline, Icon::download)
+    explicit DragMidiButton (const Skin& s) : Btn (s, "DRAG MIDI", false, Icon::download)
     {
         setMouseCursor (juce::MouseCursor::DraggingHandCursor);
         setTooltip ("Drag me into FL (piano roll, channel or playlist) to drop the pattern in as MIDI");
@@ -40,7 +40,7 @@ class StepGrid : public juce::Component, public juce::SettableTooltipClient
 public:
     StepGrid (const Skin& s, squelch::Sequencer& sq) : skin (s), seq (sq)
     {
-        setTooltip ("NOTE: drag up/down or scroll. OCT: click. ACCENT / SLIDE / GATE: click, or click and drag across steps");
+        setTooltip ("NOTE: drag up/down or scroll (double-click = C). OCT: click. ACCENT / SLIDE / GATE: click, or click and drag across steps");
     }
 
     std::function<int()> getLength;
@@ -54,13 +54,20 @@ public:
         const int playing = seq.currentStep.load();
 
         static const char* rowNames[] = { "", "NOTE", "OCT", "ACCENT", "SLIDE", "GATE" };
-        g.setFont (skin.caption());
-        g.setColour (t.label);
+        g.setFont (skin.label (9.5f, 0.14f));
+        g.setColour (t.ink);
         for (int r = rowNote; r < numRows; ++r)
-            g.drawText (rowNames[r], juce::Rectangle<float> (0.0f, rowTop[r], labelW, rowH[r]), juce::Justification::centredLeft, false);
+            g.drawText (rowNames[r], juce::Rectangle<float> (0.0f, rowTop[r] - 3.0f, labelW, rowH[r] + 6.0f), juce::Justification::centredLeft, false);
 
+        // the four groups: recessed plates
         for (int grp = 0; grp < 4; ++grp)
-            fillBox (g, groupBounds (grp), 12.0f, t.group);
+        {
+            const auto gb = groupBounds (grp);
+            g.setColour (t.kind == Theme::Kind::kawaii ? Colour (0x80ffe3ef) : (t.kind == Theme::Kind::matrix ? Colour (0x5903140a) : Colour (0x263a1236)));
+            g.fillRoundedRectangle (gb, 8.0f);
+            g.setColour (t.sectionBorder.withMultipliedAlpha (0.6f));
+            g.drawRoundedRectangle (gb, 8.0f, 1.0f);
+        }
 
         static const char* names[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
         const juce::String minus = juce::String::fromUTF8 ("\xe2\x88\x92");
@@ -70,71 +77,77 @@ public:
             const auto st = seq.getStep (i);
             const bool inLen = i < len;
             const bool now = i == playing && inLen;
-            const float a = inLen ? 1.0f : 0.3f;
+            const float a = inLen ? 1.0f : 0.35f;
+            juce::Graphics::ScopedSaveState save (g);
+            if (! inLen) g.beginTransparencyLayer (a);
 
-            // step number
+            // step number with the "now playing" light
             {
                 auto c = cell (rowNum, i);
-                if (now) fillBox (g, c.withSizeKeepingCentre (c.getWidth(), 17.0f), 6.0f, t.active);
-                g.setColour (now ? t.onActive : t.label.withMultipliedAlpha (a));
-                g.setFont (skin.font (12.0f, Weight::extraBold));
-                g.drawText (juce::String (i + 1), c, juce::Justification::centred, false);
+                drawLed (g, juce::Rectangle<float> (c.getX() + 2.0f, c.getCentreY() - 3.0f, 6.0f, 6.0f), now, t);
+                g.setColour (now ? (t.kind == Theme::Kind::kawaii ? t.title : t.ink) : t.ink2);
+                g.setFont (skin.mono (11.0f, true, 0.05f));
+                if (t.roundedFont) g.setFont (skin.label (11.0f, 0.05f));
+                g.drawText (juce::String (i + 1).paddedLeft ('0', 2), c.withTrimmedLeft (10.0f), juce::Justification::centred, false);
             }
-            // note
+            // note: a little display window
             {
                 auto c = cell (rowNote, i);
-                fillBox (g, c, 9.0f, t.well.withMultipliedAlpha (a), (now ? t.active : t.wellBorder).withMultipliedAlpha (a), now ? 1.5f : 1.0f);
-                g.setColour ((st.on ? t.text : t.label.withAlpha (0.5f)).withMultipliedAlpha (a));
-                g.setFont (skin.font (st.on ? 17.0f : 15.0f, Weight::extraBold));
-                g.drawText (st.on ? juce::String (names[st.note]) : juce::String::fromUTF8 ("\xe2\x80\x93"), c,
-                            juce::Justification::centred, false);
+                g.setColour (now ? t.phos.withAlpha (0.8f) : t.screenRing.withMultipliedAlpha (0.8f));
+                g.drawRoundedRectangle (c.expanded (1.5f), 6.0f, now ? 1.6f : 1.0f);
+                g.setColour (t.readoutBg);
+                g.fillRoundedRectangle (c, 5.0f);
+                if (now) { g.setColour (t.phos.withAlpha (0.12f)); g.fillRoundedRectangle (c, 5.0f); }
+                const auto txt = st.on ? juce::String (names[st.note]) : juce::String::fromUTF8 ("\xe2\x80\x93");
+                g.setFont (skin.readout (st.on ? 19.0f : 16.0f));
+                g.setColour ((st.on ? t.phos : t.phos.withAlpha (0.35f)).withMultipliedAlpha (0.3f));
+                g.drawText (txt, c.translated (0.0f, 0.6f).expanded (1.0f, 0.0f), juce::Justification::centred, false);
+                g.setColour (st.on ? t.phos : t.phos.withAlpha (0.35f));
+                g.drawText (txt, c, juce::Justification::centred, false);
+                g.setColour (juce::Colours::black.withAlpha (0.25f));
+                for (float y = c.getY() + 2.0f; y < c.getBottom() - 1.0f; y += 3.0f) g.fillRect (c.getX() + 2.0f, y, c.getWidth() - 4.0f, 1.0f);
             }
-            // octave
+            // octave / accent / slide: little keys that light up
+            auto smallKey = [&] (int row, bool on, const juce::String& text, bool slideIcon)
             {
-                auto c = cell (rowOct, i);
-                if (st.oct != 0) fillBox (g, c, 6.0f, t.octOn.withMultipliedAlpha (a), t.octOnBorder.withMultipliedAlpha (a), 1.0f);
-                else             fillBox (g, c, 6.0f, juce::Colours::transparentBlack, t.wellBorder.withMultipliedAlpha (a * 0.8f), 1.0f);
-                if (st.oct != 0)
+                auto c = cell (row, i).withTrimmedBottom (3.0f);
+                auto tt = t; tt.keyRadius = std::min (t.keyRadius, 7.0f);
+                drawKey (g, c, on, false, tt);
+                const auto ink = on ? t.keyOnText : t.keyText.withMultipliedAlpha (0.55f);
+                if (slideIcon)
                 {
-                    g.setColour (t.text.withMultipliedAlpha (a));
-                    g.setFont (skin.font (12.5f, Weight::extraBold));
-                    g.drawText (st.oct < 0 ? minus + "1" : juce::String ("+1"), c, juce::Justification::centred, false);
-                }
-            }
-            // accent
-            {
-                auto c = cell (rowAcc, i);
-                if (st.accent)
-                {
-                    fillBox (g, c, 6.0f, t.selected.withMultipliedAlpha (a));
-                    g.setColour (t.onSelected.withMultipliedAlpha (a));
-                    g.setFont (skin.font (13.0f, Weight::extraBold));
-                    g.drawText ("A", c, juce::Justification::centred, false);
-                }
-                else fillBox (g, c, 6.0f, juce::Colours::transparentBlack, t.wellBorder.withMultipliedAlpha (a * 0.8f), 1.0f);
-            }
-            // slide
-            {
-                auto c = cell (rowSlide, i);
-                if (st.slide)
-                {
-                    fillBox (g, c, 6.0f, t.selected.withMultipliedAlpha (a));
-                    juce::Path p;
-                    const auto m = c.getCentre();
+                    if (! on) return;
+                    juce::Path p; const auto m = c.getCentre();
                     p.startNewSubPath (m.x - 10.0f, m.y + 4.0f);
                     p.cubicTo (m.x - 3.0f, m.y + 4.0f, m.x + 2.0f, m.y - 4.0f, m.x + 10.0f, m.y - 4.0f);
-                    g.setColour (t.onSelected.withMultipliedAlpha (a));
-                    g.strokePath (p, juce::PathStrokeType (2.2f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+                    g.setColour (ink);
+                    g.strokePath (p, juce::PathStrokeType (2.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+                    return;
                 }
-                else fillBox (g, c, 6.0f, juce::Colours::transparentBlack, t.wellBorder.withMultipliedAlpha (a * 0.8f), 1.0f);
-            }
-            // gate (plays / rest)
+                if (text.isEmpty()) return;
+                g.setColour (ink);
+                g.setFont (skin.label (10.5f, 0.05f));
+                g.drawText (text, c, juce::Justification::centred, false);
+            };
+            smallKey (rowOct, st.oct != 0, st.oct < 0 ? minus + "1" : (st.oct > 0 ? juce::String ("+1") : juce::String()), false);
+            smallKey (rowAcc, st.accent, st.accent ? "A" : "", false);
+            smallKey (rowSlide, st.slide, "", true);
+
+            // gate: an LED bar (plays / rest)
             {
                 auto c = cell (rowGate, i);
-                if (now && st.on) fillBox (g, c, 3.0f, t.active);
-                else if (st.on)   fillBox (g, c, 3.0f, t.gateOn.withMultipliedAlpha (a));
-                else              fillBox (g, c, 3.0f, juce::Colours::transparentBlack, t.wellBorder.withMultipliedAlpha (a), 1.0f);
+                if (st.on)
+                {
+                    const auto col = t.kind == Theme::Kind::kawaii ? (now ? t.title : t.keyOnMid) : (now ? t.phos : t.meterOn);
+                    g.setColour (col.withAlpha (now ? 0.45f : 0.25f)); g.fillRoundedRectangle (c.expanded (2.0f), 4.0f);
+                    g.setColour (col); g.fillRoundedRectangle (c, 2.5f);
+                }
+                else
+                {
+                    g.setColour (t.kind == Theme::Kind::kawaii ? Colour (0xffffd0e4) : t.meterOff); g.fillRoundedRectangle (c, 2.5f);
+                }
             }
+            if (! inLen) g.endTransparencyLayer();
         }
     }
 
@@ -200,14 +213,14 @@ public:
 private:
     struct Hit { int row = -1, step = -1; };
 
-    // geometry (component is 898 x 190)
-    static constexpr float labelW = 67.0f, groupW = 201.0f, groupGap = 9.0f, cellW = 41.0f, cellPitch = 48.0f, cellPad = 8.0f;
-    static constexpr float rowTop[numRows] = { 8.0f, 32.0f, 79.0f, 107.0f, 139.0f, 172.0f };
-    static constexpr float rowH[numRows]   = { 18.0f, 39.0f, 21.0f, 25.0f, 25.0f, 9.0f };
+    // geometry (component is 926 x 172)
+    static constexpr float labelW = 60.0f, groupW = 208.0f, groupGap = 8.0f, cellW = 42.0f, cellPitch = 50.0f, cellPad = 9.0f;
+    static constexpr float rowTop[numRows] = { 4.0f, 28.0f, 72.0f, 98.0f, 128.0f, 160.0f };
+    static constexpr float rowH[numRows]   = { 18.0f, 38.0f, 23.0f, 27.0f, 27.0f, 7.0f };
 
     juce::Rectangle<float> groupBounds (int grp) const
     {
-        return { labelW + (float) grp * (groupW + groupGap), 0.0f, groupW, 189.0f };
+        return { labelW + (float) grp * (groupW + groupGap), 0.0f, groupW, 172.0f };
     }
 
     juce::Rectangle<float> cell (int r, int i) const
@@ -225,7 +238,7 @@ private:
         for (int i = 0; i < squelch::maxSteps; ++i)
         {
             const auto c = cell (h.row, i);
-            if (p.x >= c.getX() - 3.5f && p.x < c.getRight() + 3.5f) h.step = i;
+            if (p.x >= c.getX() - 4.0f && p.x < c.getRight() + 4.0f) h.step = i;
         }
         if (h.step < 0) return {};
         return h;

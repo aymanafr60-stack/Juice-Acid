@@ -1,4 +1,4 @@
-SQUELCH v0.7 — acid bass synth
+SQUELCH v0.8 — acid bass synth
 
 INSTALL (VST3)
 1. Close FL Studio.
@@ -19,7 +19,7 @@ PLAYING IT LIKE ACID
 - Several accents in a row with high resonance build up — that's intended.
 
 THE INTERFACE
-- Click the smiley logo (top left) to switch between the red and green theme.
+- Click the smiley logo (top left) to switch theme: Phosphor Lab -> Matrix -> Kawaii.
 - Arrows next to the preset name step through presets; click the name for the full list.
   (The 10 presets are starters and will be retuned once the core sound is final.)
 - Waves: SAW / SQUARE / PULSE (PW knob = pulse width) / SUPER (knob becomes DETUNE).
@@ -80,9 +80,18 @@ YOUR OWN PRESETS
   (C:\Users\<you>\AppData\Roaming\Squelch\Presets). Delete or share the files there.
 - Presets store the sound (synth, movement, drive, delay, reverb), not the sequencer pattern.
 
+NEW IN v0.8
+- Three new themes (click the smiley logo to cycle): PHOSPHOR LAB (default: beige lab
+  plastic in pink/purple light, green CRT), MATRIX (black + neon green, code rain),
+  KAWAII (white + pink, laptop stickers).
+- The filter screen is live: the curve follows the envelope with phosphor trails, and
+  CH2 shows the real output waveform. It only moves when sound is playing.
+- Knob values, step notes and boxes are shown on little green (or pink) displays.
+- The footer shows MIDI / SEQ status, the output meter and the volume handle.
+
 NEW IN v0.7
 - New interface, matching Aymane's mockup. Click the smiley logo to cycle themes:
-  Y2K (default) -> Red -> Green.
+  (replaced by the v0.8 themes).
 - Values like LENGTH, RATE, BPM, KEY, SCALE, TIME are boxes: click the arrows,
   drag up/down, scroll, or click the value for a list.
 - SEQ page in ARP mode shows the arp controls in place of the step grid.

@@ -177,7 +177,7 @@ SquelchProcessor::SquelchProcessor()
     refreshUserPresets();
 
     apvts.state.setProperty (presetProp, 0, nullptr);
-    apvts.state.setProperty (themeProp, 2, nullptr); // Y2K theme by default
+    apvts.state.setProperty (themeProp, 0, nullptr); // Phosphor Lab by default
     apvts.state.setProperty (pageProp, 0, nullptr);
 }
 
@@ -365,6 +365,14 @@ void SquelchProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
     }
     for (int ch = 2; ch < numCh; ++ch)
         buffer.copyFrom (ch, 0, buffer, 0, 0, numSamples);
+
+    // for the editor: scope feed
+    {
+        int w = scopeWrite.load (std::memory_order_relaxed);
+        const auto* src = buffer.getReadPointer (0);
+        for (int i = 0; i < numSamples; ++i) { scopeBuffer[w] = src[i]; w = (w + 1) % scopeSize; }
+        scopeWrite.store (w, std::memory_order_release);
+    }
 
     // for the editor: meter + filter display
     const float peak = buffer.getMagnitude (0, numSamples);

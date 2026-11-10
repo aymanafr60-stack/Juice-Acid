@@ -14,7 +14,8 @@ public:
     void resized() override;
     void mouseUp (const juce::MouseEvent&) override;
 
-    void tick(); // ~30x per second
+    void tick();          // ~30x per second
+    void themeChanged();  // rebuild the cached background
     std::function<void()> onThemeToggle;
 
     static constexpr int canvasW = 1000, canvasH = 600;
@@ -31,14 +32,15 @@ private:
     void updateShapeKnob (int wave);
     void clearPattern();
     void generateLine (bool small);
-    void paintFooter (juce::Graphics&);
+    void paintStatic (juce::Graphics&);   // everything that only changes with theme / page / mode
+    void paintStickers (juce::Graphics&);
+    void paintStatus (juce::Graphics&);   // live part of the footer
 
     SquelchProcessor& proc;
     squelch::ui::Skin& skin;
 
     // header
     Btn tabSynth, tabSeq, tabFx;
-    squelch::ui::SegmentBox tabBox;
     squelch::ui::PresetBar presetBar;
     squelch::ui::OutMeter meter;
 
@@ -89,8 +91,11 @@ private:
     int lastPresetShown = -1;
     float meterLevel = 0.0f;
     int lastPrintOk = 0, lastPrintFail = 0;
-    juce::String toast;
+    juce::String toast, lastStatus;
     juce::uint32 toastUntil = 0;
+
+    juce::Image background;          // cached static layer
+    float backgroundScale = 0.0f;
 };
 
 class SquelchEditor : public juce::AudioProcessorEditor, private juce::Timer
